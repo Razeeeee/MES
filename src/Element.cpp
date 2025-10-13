@@ -7,7 +7,7 @@ Element::Element(int id, const std::vector<int>& nodeIds, const std::string& typ
     : id(id), nodeIds(nodeIds), type(type) {}
 
 void Element::print() const {
-    std::cout << "Element " << std::setw(3) << id << " [" << type << "]: ";
+    std::cout << "Element " << std::setw(3) << id << "]: ";
     for (size_t i = 0; i < nodeIds.size(); ++i) {
         std::cout << nodeIds[i];
         if (i < nodeIds.size() - 1) {

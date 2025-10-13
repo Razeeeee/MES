@@ -4,9 +4,6 @@
 #include <string>
 
 int main() {
-    std::cout << "MES Grid Reader" << std::endl;
-    std::cout << "===============" << std::endl;
-    
     // Create grid selector
     GridSelector gridSelector("grids/");
     
