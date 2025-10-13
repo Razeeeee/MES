@@ -17,8 +17,11 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 # Include directories
 include_directories(src)
 
-# Source files
-file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.h")
+# Source files - explicitly list to avoid archive folder
+file(GLOB SOURCES 
+    "src/*.cpp" 
+    "src/*.h"
+)
 
 # Create executable
 add_executable(MES_Project ${SOURCES})
