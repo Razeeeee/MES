@@ -1,60 +1,40 @@
-#include "Grid.h"
-#include "GridSelector.h"
+#include "GaussianIntegration.h"
 #include <iostream>
-#include <string>
+#include <iomanip>
 
 int main() {
-    // Create grid selector
-    GridSelector gridSelector("grids/");
+    GaussianIntegration gauss;
     
-    if (!gridSelector.hasGridFiles()) {
-        std::cout << "No grid files found. Please add grid files to the grids/ directory." << std::endl;
-        return 1;
-    }
+    std::cout << std::fixed << std::setprecision(6);
+    std::cout << "Gaussian Integration Tests\n";
+    std::cout << "==========================\n\n";
     
-    while (true) {
-        // Use GridSelector to get filename
-        std::string filename = gridSelector.selectGrid();
-        
-        if (filename.empty()) {
-            std::cout << "Goodbye!" << std::endl;
-            break;
-        }
-        
-        // Create and load grid
-        Grid grid;
-        if (grid.loadFromFile(filename)) {
-            // Display basic information
-            grid.printSummary();
-            grid.printGlobalData();
-            
-            // Show node ids and coordinates
-            grid.printNodesIdAndCoordinates();
-            
-            // Additional information menu
-            char showMore;
-            std::cout << "\nShow more details? (y/n): ";
-            std::cin >> showMore;
-            
-            if (showMore == 'y' || showMore == 'Y') {
-                grid.printElements();
-                grid.printBoundaryConditions();
-            }
-        } else {
-            std::cout << "Failed to load grid file: " << filename << std::endl;
-        }
-        
-        char continueChoice;
-        std::cout << "\nLoad another grid? (y/n): ";
-        std::cin >> continueChoice;
-        
-        if (continueChoice != 'y' && continueChoice != 'Y') {
-            break;
-        }
-        
-        // Refresh file list in case new files were added
-        gridSelector.refreshFileList();
-    }
+    // Define 1D function: f(x) = 5x^2 + 3x + 6
+    auto f1D = [](double x) {
+        return 5.0 * x * x + 3.0 * x + 6.0;
+    };
+    
+    // Define 2D function: f(x,y) = 5x^2*y^2 + 3xy + 6
+    auto f2D = [](double x, double y) {
+        return 5.0 * x * x * y * y + 3.0 * x * y + 6.0;
+    };
+    
+    // 1D Integration tests (boundaries: -1 to 1)
+    std::cout << "1D Function: f(x) = 5x^2 + 3x + 6, bounds: [-1, 1]\n";
+    double result1D_2pt = gauss.integrate1D(f1D, -1.0, 1.0, 2);
+    double result1D_3pt = gauss.integrate1D(f1D, -1.0, 1.0, 3);
+    
+    std::cout << "2-point Gaussian: " << result1D_2pt << std::endl;
+    std::cout << "3-point Gaussian: " << result1D_3pt << std::endl;
+    std::cout << std::endl;
+    
+    // 2D Integration tests (boundaries: x: -1 to 1, y: -1 to 1)
+    std::cout << "2D Function: f(x,y) = 5x^2*y^2 + 3xy + 6, bounds: x[-1,1], y[-1,1]\n";
+    double result2D_2pt = gauss.integrate2D(f2D, -1.0, 1.0, -1.0, 1.0, 2);
+    double result2D_3pt = gauss.integrate2D(f2D, -1.0, 1.0, -1.0, 1.0, 3);
+    
+    std::cout << "2-point Gaussian: " << result2D_2pt << std::endl;
+    std::cout << "3-point Gaussian: " << result2D_3pt << std::endl;
     
     return 0;
 }
