@@ -6,11 +6,9 @@ GaussianIntegration::GaussianIntegration() {
 }
 
 void GaussianIntegration::initializeGaussianData() {
-    // 2-point Gaussian quadrature
     gauss2Point.points = {-1.0/std::sqrt(3.0), 1.0/std::sqrt(3.0)};
     gauss2Point.weights = {1.0, 1.0};
     
-    // 3-point Gaussian quadrature
     gauss3Point.points = {-std::sqrt(3.0/5.0), 0.0, std::sqrt(3.0/5.0)};
     gauss3Point.weights = {5.0/9.0, 8.0/9.0, 5.0/9.0};
 }
@@ -32,7 +30,7 @@ double GaussianIntegration::transformCoordinate(double xi, double a, double b) c
 double GaussianIntegration::integrate1D(const Function1D& func, double a, double b, int numPoints) {
     const auto& gaussData = getGaussianData(numPoints);
     double result = 0.0;
-    double jacobian = (b - a) / 2.0;  // Simple transformation jacobian
+    double jacobian = (b - a) / 2.0;
     
     for (size_t i = 0; i < gaussData.points.size(); ++i) {
         double x = transformCoordinate(gaussData.points[i], a, b);
@@ -45,7 +43,7 @@ double GaussianIntegration::integrate1D(const Function1D& func, double a, double
 double GaussianIntegration::integrate2D(const Function2D& func, double x1, double x2, double y1, double y2, int numPoints) {
     const auto& gaussData = getGaussianData(numPoints);
     double result = 0.0;
-    double jacobian = ((x2 - x1) / 2.0) * ((y2 - y1) / 2.0);  // 2D transformation jacobian
+    double jacobian = ((x2 - x1) / 2.0) * ((y2 - y1) / 2.0);
     
     for (size_t i = 0; i < gaussData.points.size(); ++i) {
         for (size_t j = 0; j < gaussData.points.size(); ++j) {
