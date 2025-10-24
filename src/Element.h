@@ -49,6 +49,30 @@ public:
     static std::vector<std::vector<double>> calculateShapeFunctionDerivativeMatrix_Xi(int numPoints);
     static std::vector<std::vector<double>> calculateShapeFunctionDerivativeMatrix_Eta(int numPoints);
     
+    // Jacobian calculation methods
+    // Calculate Jacobian matrix (2x2) at a specific integration point
+    std::vector<std::vector<double>> calculateJacobian(const std::vector<double>& nodeX, 
+                                                       const std::vector<double>& nodeY, 
+                                                       double xi, double eta) const;
+    
+    // Calculate inverse Jacobian matrix (2x2)
+    std::vector<std::vector<double>> calculateInverseJacobian(const std::vector<std::vector<double>>& jacobian) const;
+    
+    // Calculate determinant of Jacobian matrix
+    double calculateDetJ(const std::vector<std::vector<double>>& jacobian) const;
+    
+    // Calculate Jacobians for all integration points for this element
+    // Returns vector of {jacobian, inverse_jacobian, detJ} for each integration point
+    struct JacobianData {
+        std::vector<std::vector<double>> jacobian;
+        std::vector<std::vector<double>> inverseJacobian;
+        double detJ;
+    };
+    
+    std::vector<JacobianData> calculateElementJacobians(const std::vector<double>& nodeX, 
+                                                        const std::vector<double>& nodeY, 
+                                                        int numGaussPoints) const;
+    
     // Friend operator for output stream
     friend std::ostream& operator<<(std::ostream& os, const Element& element);
 };
