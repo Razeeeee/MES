@@ -9,7 +9,7 @@ void printMatrix(const std::vector<std::vector<double>>& matrix, const std::stri
     for (const auto& row : matrix) {
         std::cout << "  [";
         for (size_t j = 0; j < row.size(); ++j) {
-            std::cout << std::setw(10) << std::fixed << std::setprecision(6) << row[j];
+            std::cout << std::setw(12) << std::fixed << std::setprecision(6) << row[j];
             if (j < row.size() - 1) std::cout << ", ";
         }
         std::cout << " ]\n";
@@ -26,18 +26,17 @@ int main() {
         return 1;
     }
     
-    std::cout << "=== Shape Function Derivatives and Jacobian Calculations ===\n\n";
+    // Get global data including conductivity
+    const auto& globalData = grid.getGlobalData();
+    double conductivity = globalData.getConductivity();
     
-    // First show the shape function derivative matrices
+    std::cout << "=== H Matrix Calculation ===\n\n";
+    std::cout << "Conductivity: " << conductivity << "\n\n";
+    std::cout << "=== Shape Function Derivatives with Respect to Physical Coordinates (x, y) ===\n\n";
+    
+    // First show the natural coordinate derivative matrices
     std::cout << "2x2 Gauss Points Integration Scheme:\n";
     std::cout << "Gauss points: ±1/sqrt(3) = ±" << 1.0/std::sqrt(3.0) << "\n\n";
-    
-    // Show Gauss points order and coordinates
-    std::cout << "Gauss Points Order (Point Number, ξ, η):\n";
-    std::cout << "Point 1: ξ = -1/√3, η = -1/√3  (" << std::setw(8) << -1.0/std::sqrt(3.0) << ", " << std::setw(8) << -1.0/std::sqrt(3.0) << ")\n";
-    std::cout << "Point 2: ξ = +1/√3, η = -1/√3  (" << std::setw(8) <<  1.0/std::sqrt(3.0) << ", " << std::setw(8) << -1.0/std::sqrt(3.0) << ")\n";
-    std::cout << "Point 3: ξ = -1/√3, η = +1/√3  (" << std::setw(8) << -1.0/std::sqrt(3.0) << ", " << std::setw(8) <<  1.0/std::sqrt(3.0) << ")\n";
-    std::cout << "Point 4: ξ = +1/√3, η = +1/√3  (" << std::setw(8) <<  1.0/std::sqrt(3.0) << ", " << std::setw(8) <<  1.0/std::sqrt(3.0) << ")\n\n";
     
     std::vector<std::string> point2Names = {
         "(-1/sqrt(3), -1/sqrt(3))",
@@ -46,8 +45,9 @@ int main() {
         "( 1/sqrt(3),  1/sqrt(3))"
     };
     
-    // Show dN/dXi matrix
-    std::cout << "dN/dXi Matrix (4x4) - Shape function derivatives with respect to Xi:\n";
+    // Show dN/dXi and dN/dEta matrices (natural coordinates)
+    std::cout << "Shape function derivatives with respect to natural coordinates:\n\n";
+    std::cout << "dN/dXi Matrix (4x4):\n";
     auto dN_dXi_2pt = Element::calculateShapeFunctionDerivativeMatrix_Xi(2);
     for (size_t i = 0; i < dN_dXi_2pt.size(); ++i) {
         std::cout << "Point " << (i+1) << " " << point2Names[i] << ": [";
@@ -58,8 +58,7 @@ int main() {
         std::cout << " ]\n";
     }
     
-    // Show dN/dEta matrix
-    std::cout << "\ndN/dEta Matrix (4x4) - Shape function derivatives with respect to Eta:\n";
+    std::cout << "\ndN/dEta Matrix (4x4):\n";
     auto dN_dEta_2pt = Element::calculateShapeFunctionDerivativeMatrix_Eta(2);
     for (size_t i = 0; i < dN_dEta_2pt.size(); ++i) {
         std::cout << "Point " << (i+1) << " " << point2Names[i] << ": [";
@@ -75,9 +74,9 @@ int main() {
     const auto& nodes = grid.getNodes();
     const auto& elements = grid.getElements();
     
-    std::cout << "Jacobian calculations for elements using 2x2 Gauss points:\n\n";
+    std::cout << "Physical derivatives (dN/dx, dN/dy) for elements:\n\n";
     
-    // Process first 3 elements with 2x2 integration only
+    // Process first 3 elements to demonstrate physical derivatives
     for (int elemIdx = 0; elemIdx < 3 && elemIdx < (int)elements.size(); ++elemIdx) {
         const auto& element = elements[elemIdx];
         
@@ -95,7 +94,6 @@ int main() {
         // Extract node coordinates
         std::vector<double> nodeX(4), nodeY(4);
         for (size_t i = 0; i < nodeIds.size(); ++i) {
-            // Find the node with matching ID (nodes are 1-indexed in file, but stored 0-indexed)
             const Node& node = nodes[nodeIds[i] - 1];
             nodeX[i] = node.getX();
             nodeY[i] = node.getY();
@@ -107,43 +105,63 @@ int main() {
                       << ", " << std::setw(10) << nodeY[i] << ")\n";
         }
         
-        // Calculate Jacobians with 2x2 Gauss points
         try {
-            auto jacobianData = element.calculateElementJacobians(nodeX, nodeY, 2);
+            // Calculate physical derivatives using the new method
+            auto physicalDerivatives = element.calculatePhysicalDerivativeMatrices(nodeX, nodeY, 2);
+            auto dN_dx_matrix = physicalDerivatives.first;
+            auto dN_dy_matrix = physicalDerivatives.second;
             
-            std::cout << "\nJacobian calculations for " << jacobianData.size() << " integration points:\n";
+            std::cout << "\nShape function derivatives with respect to physical coordinates:\n\n";
             
-            for (size_t i = 0; i < jacobianData.size(); ++i) {
-                std::cout << "\nPoint " << (i+1) << " " << point2Names[i] << ":\n";
-                printMatrix(jacobianData[i].jacobian, "  Jacobian [J]");
-                std::cout << "  Determinant |J| = " << std::setw(12) << jacobianData[i].detJ << "\n";
-                printMatrix(jacobianData[i].inverseJacobian, "  Inverse Jacobian [J^-1]");
-                
-                // Verify that J * J^-1 = I (identity matrix)
-                std::cout << "  Verification (J * J^-1):\n";
-                for (int row = 0; row < 2; ++row) {
-                    std::cout << "  [";
-                    for (int col = 0; col < 2; ++col) {
-                        double sum = 0.0;
-                        for (int k = 0; k < 2; ++k) {
-                            sum += jacobianData[i].jacobian[row][k] * jacobianData[i].inverseJacobian[k][col];
-                        }
-                        std::cout << std::setw(10) << sum;
-                        if (col < 1) std::cout << ", ";
-                    }
-                    std::cout << " ]\n";
+            std::cout << "dN/dx Matrix (4x4) - derivatives with respect to x:\n";
+            for (size_t i = 0; i < dN_dx_matrix.size(); ++i) {
+                std::cout << "Point " << (i+1) << " " << point2Names[i] << ": [";
+                for (size_t j = 0; j < dN_dx_matrix[i].size(); ++j) {
+                    std::cout << std::setw(10) << dN_dx_matrix[i][j];
+                    if (j < dN_dx_matrix[i].size() - 1) std::cout << ", ";
                 }
+                std::cout << " ]\n";
             }
             
+            std::cout << "\ndN/dy Matrix (4x4) - derivatives with respect to y:\n";
+            for (size_t i = 0; i < dN_dy_matrix.size(); ++i) {
+                std::cout << "Point " << (i+1) << " " << point2Names[i] << ": [";
+                for (size_t j = 0; j < dN_dy_matrix[i].size(); ++j) {
+                    std::cout << std::setw(10) << dN_dy_matrix[i][j];
+                    if (j < dN_dy_matrix[i].size() - 1) std::cout << ", ";
+                }
+                std::cout << " ]\n";
+            }
+            
+            // Also show the Jacobian data for verification
+            std::cout << "\nJacobian verification for this element:\n";
+            auto jacobianData = element.calculateElementJacobians(nodeX, nodeY, 2);
+            for (size_t i = 0; i < jacobianData.size(); ++i) {
+                std::cout << "\nPoint " << (i+1) << " " << point2Names[i] << ":\n";
+                std::cout << "  Determinant |J| = " << std::setw(12) << jacobianData[i].detJ << "\n";
+                printMatrix(jacobianData[i].inverseJacobian, "  Inverse Jacobian [J^-1]");
+            }
+            
+            // Calculate and display H matrix
+            std::cout << "\nH Matrix Calculation:\n";
+            std::cout << "H = conductivity * (dN/dx * dN/dx^T + dN/dy * dN/dy^T) * detJ * weight\n";
+            std::cout << "Summed over all integration points\n\n";
+            
+            auto H_matrix = element.calculateHMatrix(nodeX, nodeY, conductivity, 2);
+            printMatrix(H_matrix, "H Matrix [4x4]");
+            
         } catch (const std::exception& e) {
-            std::cerr << "Error calculating Jacobians: " << e.what() << "\n";
+            std::cerr << "Error calculating physical derivatives: " << e.what() << "\n";
         }
         
         std::cout << "\n" << std::string(80, '-') << "\n\n";
     }
     
-    // Summary for all elements (2x2 only)
-    std::cout << "=== Summary: Jacobian Determinants for All Elements (2x2 Gauss) ===\n\n";
+    // Summary showing all elements' physical derivatives at first integration point
+    std::cout << "=== Summary: Physical Derivatives at First Integration Point for All Elements ===\n\n";
+    std::cout << "Point 1: ξ = -1/√3, η = -1/√3\n\n";
+    std::cout << "Element | dN1/dx    | dN2/dx    | dN3/dx    | dN4/dx    | dN1/dy    | dN2/dy    | dN3/dy    | dN4/dy\n";
+    std::cout << std::string(100, '-') << "\n";
     
     for (const auto& element : elements) {
         const auto& nodeIds = element.getNodeIds();
@@ -157,17 +175,63 @@ int main() {
         }
         
         try {
-            auto jacobianData = element.calculateElementJacobians(nodeX, nodeY, 2);
+            auto physicalDerivatives = element.calculatePhysicalDerivativeMatrices(nodeX, nodeY, 2);
+            auto dN_dx_matrix = physicalDerivatives.first;
+            auto dN_dy_matrix = physicalDerivatives.second;
             
-            std::cout << "Element " << std::setw(2) << element.getId() << " Det J = [";
-            for (size_t i = 0; i < jacobianData.size(); ++i) {
-                std::cout << std::setw(10) << jacobianData[i].detJ;
-                if (i < jacobianData.size() - 1) std::cout << ", ";
+            std::cout << std::setw(7) << element.getId() << " |";
+            // Show dN/dx for all shape functions at first integration point
+            for (int j = 0; j < 4; ++j) {
+                std::cout << std::setw(10) << dN_dx_matrix[0][j] << " |";
             }
-            std::cout << " ]\n";
+            // Show dN/dy for all shape functions at first integration point
+            for (int j = 0; j < 4; ++j) {
+                std::cout << std::setw(10) << dN_dy_matrix[0][j] << " |";
+            }
+            std::cout << "\n";
             
         } catch (const std::exception& e) {
-            std::cerr << "Element " << element.getId() << " - Error: " << e.what() << "\n";
+            std::cout << std::setw(7) << element.getId() << " | Error: " << e.what() << "\n";
+        }
+    }
+    
+    // H Matrix Summary for all elements
+    std::cout << "\n" << std::string(80, '=') << "\n";
+    std::cout << "\n=== H Matrix Summary for All Elements ===\n\n";
+    std::cout << "H Matrix diagonal elements (H[0][0], H[1][1], H[2][2], H[3][3]) for each element:\n\n";
+    std::cout << "Element | H[0][0]     | H[1][1]     | H[2][2]     | H[3][3]     | Matrix Sum\n";
+    std::cout << std::string(80, '-') << "\n";
+    
+    for (const auto& element : elements) {
+        const auto& nodeIds = element.getNodeIds();
+        
+        // Extract node coordinates
+        std::vector<double> nodeX(4), nodeY(4);
+        for (size_t i = 0; i < nodeIds.size(); ++i) {
+            const Node& node = nodes[nodeIds[i] - 1];
+            nodeX[i] = node.getX();
+            nodeY[i] = node.getY();
+        }
+        
+        try {
+            auto H_matrix = element.calculateHMatrix(nodeX, nodeY, conductivity, 2);
+            
+            // Calculate sum of all matrix elements
+            double matrixSum = 0.0;
+            for (const auto& row : H_matrix) {
+                for (double val : row) {
+                    matrixSum += val;
+                }
+            }
+            
+            std::cout << std::setw(7) << element.getId() << " |";
+            for (int i = 0; i < 4; ++i) {
+                std::cout << std::setw(12) << H_matrix[i][i] << " |";
+            }
+            std::cout << std::setw(12) << matrixSum << "\n";
+            
+        } catch (const std::exception& e) {
+            std::cout << std::setw(7) << element.getId() << " | Error: " << e.what() << "\n";
         }
     }
     

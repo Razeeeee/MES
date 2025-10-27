@@ -14,7 +14,7 @@ run:
 	@./scripts/run.sh
 
 # Build and run the project
-build-run:
+dev:
 	@chmod +x scripts/build-run.sh
 	@./scripts/build-run.sh
 

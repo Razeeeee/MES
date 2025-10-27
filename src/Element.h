@@ -73,6 +73,35 @@ public:
                                                         const std::vector<double>& nodeY, 
                                                         int numGaussPoints) const;
     
+    // Calculate shape function derivatives with respect to physical coordinates (x, y)
+    // Using chain rule: [dN/dx] = [J^-1] * [dN/dxi ]
+    //                  [dN/dy]           [dN/deta]
+    
+    // Calculate dN/dx for all shape functions at a specific integration point
+    static std::vector<double> calculateDN_Dx(double xi, double eta, 
+                                              const std::vector<std::vector<double>>& inverseJacobian);
+    
+    // Calculate dN/dy for all shape functions at a specific integration point  
+    static std::vector<double> calculateDN_Dy(double xi, double eta, 
+                                              const std::vector<std::vector<double>>& inverseJacobian);
+    
+    // Calculate matrices of shape function derivatives with respect to x and y
+    // at all integration points for this element
+    // Returns pair of matrices: {dN_dx_matrix, dN_dy_matrix}
+    // Each matrix has rows = integration points, columns = shape functions (4 for DC2D4)
+    std::pair<std::vector<std::vector<double>>, std::vector<std::vector<double>>> 
+    calculatePhysicalDerivativeMatrices(const std::vector<double>& nodeX, 
+                                       const std::vector<double>& nodeY, 
+                                       int numGaussPoints) const;
+    
+    // Calculate H matrix for heat conduction using physical derivatives
+    // H = conductivity * (dN/dx * transpose(dN/dx) + dN/dy * transpose(dN/dy)) * detJ
+    // Sums contributions from all integration points
+    std::vector<std::vector<double>> calculateHMatrix(const std::vector<double>& nodeX, 
+                                                     const std::vector<double>& nodeY, 
+                                                     double conductivity,
+                                                     int numGaussPoints) const;
+    
     // Friend operator for output stream
     friend std::ostream& operator<<(std::ostream& os, const Element& element);
 };
