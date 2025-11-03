@@ -244,3 +244,46 @@ void Grid::printNodesIdAndCoordinates() const {
     std::cout << "=================================" << std::endl;
     std::cout << "Total nodes: " << nodes.size() << std::endl;
 }
+
+EquationSystem Grid::assembleGlobalEquationSystem(int numGaussPoints) const {
+    // Get the number of nodes (size of global matrix)
+    int N = nodes.size();
+    
+    // Initialize equation system with size N
+    EquationSystem eqSystem(N);
+    
+    // Get conductivity from global data
+    double conductivity = globalData.getConductivity();
+    
+    // Iterate through all elements
+    for (const auto& element : elements) {
+        // Get node IDs for this element (local numbering: 0-3)
+        const auto& nodeIds = element.getNodeIds();
+        
+        // Extract node coordinates for this element
+        std::vector<double> nodeX(4), nodeY(4);
+        for (size_t i = 0; i < nodeIds.size(); ++i) {
+            const Node& node = nodes[nodeIds[i] - 1]; // nodeIds are 1-indexed
+            nodeX[i] = node.getX();
+            nodeY[i] = node.getY();
+        }
+        
+        // Calculate local H matrix [4x4] for this element
+        auto localH = element.calculateHMatrix(nodeX, nodeY, conductivity, numGaussPoints);
+        
+        // Aggregate local H matrix into global H matrix
+        // Map from local element indices (0-3) to global node indices
+        for (size_t i = 0; i < nodeIds.size(); ++i) {
+            int globalI = nodeIds[i] - 1; // Convert to 0-indexed
+            
+            for (size_t j = 0; j < nodeIds.size(); ++j) {
+                int globalJ = nodeIds[j] - 1; // Convert to 0-indexed
+                
+                // Add local contribution to global matrix
+                eqSystem.addToHMatrix(globalI, globalJ, localH[i][j]);
+            }
+        }
+    }
+    
+    return eqSystem;
+}

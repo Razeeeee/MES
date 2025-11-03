@@ -2,6 +2,7 @@
 #include "Node.h"
 #include "Element.h"
 #include "GlobalData.h"
+#include "EquationSystem.h"
 #include <vector>
 #include <string>
 #include <set>
@@ -47,6 +48,11 @@ public:
     // Utility methods
     Node* findNodeById(int id);
     Element* findElementById(int id);
+    
+    // Global matrix assembly
+    // Calculate global H matrix by aggregating local element H matrices
+    // Returns EquationSystem object containing the global H matrix [N x N]
+    EquationSystem assembleGlobalEquationSystem(int numGaussPoints = 2) const;
     
     // Display methods
     void printGlobalData() const;
