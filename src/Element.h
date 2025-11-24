@@ -41,7 +41,13 @@ public:
     static double dN1_dEta(double xi, double eta);
     static double dN2_dEta(double xi, double eta);
     static double dN3_dEta(double xi, double eta);
-    static double dN4_dEta(double xi, double eta);
+    static double dN4_dEta(double xi, double /*eta*/);
+    
+    // Shape functions for boundary condition matrix
+    static double N1(double xi, double eta);
+    static double N2(double xi, double eta);
+    static double N3(double xi, double eta);
+    static double N4(double xi, double eta);
     
     // Calculate matrix of shape function derivatives at integration points
     // Returns matrix where rows are integration points and columns are shape functions
@@ -101,6 +107,30 @@ public:
                                                      const std::vector<double>& nodeY, 
                                                      double conductivity,
                                                      int numGaussPoints) const;
+    
+    // Calculate Hbc matrix for boundary conditions
+    // Hbc = alfa * N * transpose(N) * detJ
+    // Only calculates for edges with boundary conditions
+    // Parameters: nodeX, nodeY - coordinates of element nodes
+    //            alfa - heat transfer coefficient
+    //            boundaryEdges - which edges have BC (0=bottom, 1=right, 2=top, 3=left)
+    std::vector<std::vector<double>> calculateHbcMatrix(const std::vector<double>& nodeX,
+                                                        const std::vector<double>& nodeY,
+                                                        double alfa,
+                                                        const std::vector<bool>& boundaryEdges) const;
+    
+    // Calculate P vector for boundary conditions
+    // P = alfa * tot * N * detJ
+    // Only calculates for edges with boundary conditions
+    // Parameters: nodeX, nodeY - coordinates of element nodes
+    //            alfa - heat transfer coefficient
+    //            tot - ambient temperature
+    //            boundaryEdges - which edges have BC (0=bottom, 1=right, 2=top, 3=left)
+    std::vector<double> calculatePVector(const std::vector<double>& nodeX,
+                                        const std::vector<double>& nodeY,
+                                        double alfa,
+                                        double tot,
+                                        const std::vector<bool>& boundaryEdges) const;
     
     // Friend operator for output stream
     friend std::ostream& operator<<(std::ostream& os, const Element& element);

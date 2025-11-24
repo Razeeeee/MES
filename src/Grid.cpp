@@ -252,8 +252,10 @@ EquationSystem Grid::assembleGlobalEquationSystem(int numGaussPoints) const {
     // Initialize equation system with size N
     EquationSystem eqSystem(N);
     
-    // Get conductivity from global data
+    // Get conductivity and alfa from global data
     double conductivity = globalData.getConductivity();
+    double alfa = globalData.getAlfa();
+    double tot = globalData.getTot();
     
     // Iterate through all elements
     for (const auto& element : elements) {
@@ -271,19 +273,66 @@ EquationSystem Grid::assembleGlobalEquationSystem(int numGaussPoints) const {
         // Calculate local H matrix [4x4] for this element
         auto localH = element.calculateHMatrix(nodeX, nodeY, conductivity, numGaussPoints);
         
-        // Aggregate local H matrix into global H matrix
+        // Determine which edges have boundary conditions
+        auto boundaryEdges = getElementBoundaryEdges(element);
+        
+        // Calculate local Hbc matrix [4x4] for this element
+        auto localHbc = element.calculateHbcMatrix(nodeX, nodeY, alfa, boundaryEdges);
+        
+        // Calculate local P vector [4] for this element
+        auto localP = element.calculatePVector(nodeX, nodeY, alfa, tot, boundaryEdges);
+        
+        // Aggregate local H and Hbc matrices into global matrices
         // Map from local element indices (0-3) to global node indices
         for (size_t i = 0; i < nodeIds.size(); ++i) {
             int globalI = nodeIds[i] - 1; // Convert to 0-indexed
             
+            // Add local P contribution to global P vector
+            eqSystem.addToPVector(globalI, localP[i]);
+            
             for (size_t j = 0; j < nodeIds.size(); ++j) {
                 int globalJ = nodeIds[j] - 1; // Convert to 0-indexed
                 
-                // Add local contribution to global matrix
+                // Add local contributions to global matrices
                 eqSystem.addToHMatrix(globalI, globalJ, localH[i][j]);
+                eqSystem.addToHbcMatrix(globalI, globalJ, localHbc[i][j]);
             }
         }
     }
     
     return eqSystem;
+}
+
+std::vector<bool> Grid::getElementBoundaryEdges(const Element& element) const {
+    // Edge definitions for 4-node quadrilateral (DC2D4):
+    // Edge 0 (bottom): nodes 1-2 (local 0-1)
+    // Edge 1 (right):  nodes 2-3 (local 1-2)
+    // Edge 2 (top):    nodes 3-4 (local 2-3)
+    // Edge 3 (left):   nodes 4-1 (local 3-0)
+    
+    const auto& nodeIds = element.getNodeIds();
+    std::vector<bool> boundaryEdges(4, false);
+    
+    // Check each edge
+    // Edge 0 (bottom): nodes 0-1
+    if (boundaryConditions.count(nodeIds[0]) && boundaryConditions.count(nodeIds[1])) {
+        boundaryEdges[0] = true;
+    }
+    
+    // Edge 1 (right): nodes 1-2
+    if (boundaryConditions.count(nodeIds[1]) && boundaryConditions.count(nodeIds[2])) {
+        boundaryEdges[1] = true;
+    }
+    
+    // Edge 2 (top): nodes 2-3
+    if (boundaryConditions.count(nodeIds[2]) && boundaryConditions.count(nodeIds[3])) {
+        boundaryEdges[2] = true;
+    }
+    
+    // Edge 3 (left): nodes 3-0
+    if (boundaryConditions.count(nodeIds[3]) && boundaryConditions.count(nodeIds[0])) {
+        boundaryEdges[3] = true;
+    }
+    
+    return boundaryEdges;
 }

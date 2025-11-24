@@ -54,6 +54,10 @@ public:
     // Returns EquationSystem object containing the global H matrix [N x N]
     EquationSystem assembleGlobalEquationSystem(int numGaussPoints = 2) const;
     
+    // Helper method to determine which edges of an element have boundary conditions
+    // Returns vector of 4 bools: [bottom, right, top, left]
+    std::vector<bool> getElementBoundaryEdges(const Element& element) const;
+    
     // Display methods
     void printGlobalData() const;
     void printNodes() const;

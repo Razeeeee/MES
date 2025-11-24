@@ -92,7 +92,7 @@ std::string GridSelector::getGridPath(int choice) const {
         return "";
     }
     
-    return gridDirectory + availableGridFiles[choice - 1];
+    return gridDirectory + "/" + availableGridFiles[choice - 1];
 }
 
 bool GridSelector::hasGridFiles() const {
