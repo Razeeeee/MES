@@ -27,6 +27,7 @@ bool Grid::loadFromFile(const std::string& filename) {
     nodes.clear();
     elements.clear();
     boundaryConditions.clear();
+    boundaryConditionsMap.clear();
     
     while (std::getline(file, line)) {
         line = trim(line);
@@ -140,10 +141,62 @@ void Grid::parseBoundaryConditions(const std::string& line) {
     std::replace(cleanLine.begin(), cleanLine.end(), ',', ' ');
     
     std::istringstream iss(cleanLine);
-    int nodeId;
+    std::vector<std::string> tokens;
+    std::string token;
     
-    while (iss >> nodeId) {
-        boundaryConditions.insert(nodeId);
+    // Read all tokens
+    while (iss >> token) {
+        tokens.push_back(token);
+    }
+    
+    // Check if we have the new format with alfa and tot values
+    // New format: nodeId1, alfa1, tot1, nodeId2, alfa2, tot2, ...
+    // Old format: nodeId1, nodeId2, nodeId3, ...
+    
+    bool isNewFormat = false;
+    
+    // Try to detect new format: if we have multiples of 3 tokens, it might be new format
+    // Also check if tokens after node IDs are floating point numbers
+    if (tokens.size() >= 3 && tokens.size() % 3 == 0) {
+        // Check if second token looks like a float (contains '.' or is larger than reasonable node count)
+        try {
+            double testValue = std::stod(tokens[1]);
+            // If successfully parsed as double and looks like alfa (typically 25-1000), assume new format
+            if (tokens[1].find('.') != std::string::npos || testValue > 100) {
+                isNewFormat = true;
+            }
+        } catch (...) {
+            // Not a number, so it's old format
+        }
+    }
+    
+    if (isNewFormat) {
+        // New format: nodeId, alfa, tot (triplets)
+        for (size_t i = 0; i + 2 < tokens.size(); i += 3) {
+            try {
+                int nodeId = std::stoi(tokens[i]);
+                double alfa = std::stod(tokens[i + 1]);
+                double tot = std::stod(tokens[i + 2]);
+                
+                boundaryConditionsMap[nodeId] = BoundaryCondition(alfa, tot);
+                boundaryConditions.insert(nodeId); // Also add to old set for compatibility
+            } catch (const std::exception& e) {
+                std::cerr << "Warning: Could not parse BC triplet: " << tokens[i] << " " 
+                          << tokens[i+1] << " " << tokens[i+2] << std::endl;
+            }
+        }
+    } else {
+        // Old format: just node IDs
+        // Use global alfa and tot values
+        for (const auto& token : tokens) {
+            try {
+                int nodeId = std::stoi(token);
+                boundaryConditions.insert(nodeId);
+                // Don't add to boundaryConditionsMap - will use global values
+            } catch (const std::exception& e) {
+                std::cerr << "Warning: Could not parse node ID: " << token << std::endl;
+            }
+        }
     }
 }
 
@@ -166,6 +219,25 @@ std::vector<std::string> Grid::split(const std::string& str, char delimiter) {
     }
     
     return tokens;
+}
+
+bool Grid::getNodeBoundaryCondition(int nodeId, double& alfa, double& tot) const {
+    // First check if node has specific BC parameters
+    auto it = boundaryConditionsMap.find(nodeId);
+    if (it != boundaryConditionsMap.end()) {
+        alfa = it->second.alfa;
+        tot = it->second.tot;
+        return true;
+    }
+    
+    // If not in map but in old set, use global values
+    if (boundaryConditions.count(nodeId) > 0) {
+        alfa = globalData.getAlfa();
+        tot = globalData.getTot();
+        return true;
+    }
+    
+    return false;
 }
 
 Node* Grid::findNodeById(int id) {
@@ -275,12 +347,24 @@ EquationSystem Grid::assembleGlobalEquationSystem(int numGaussPoints) const {
         
         // Determine which edges have boundary conditions
         auto boundaryEdges = getElementBoundaryEdges(element);
+
+        // Build node-specific alfa/tot vectors (fallback to global values when not specified)
+        std::vector<double> nodeAlfa(4), nodeTot(4);
+        for (size_t i = 0; i < nodeIds.size(); ++i) {
+            double nAlfa, nTot;
+            if (!getNodeBoundaryCondition(nodeIds[i], nAlfa, nTot)) {
+                nAlfa = globalData.getAlfa();
+                nTot = globalData.getTot();
+            }
+            nodeAlfa[i] = nAlfa;
+            nodeTot[i] = nTot;
+        }
         
-        // Calculate local Hbc matrix [4x4] for this element
-        auto localHbc = element.calculateHbcMatrix(nodeX, nodeY, alfa, boundaryEdges);
+        // Calculate local Hbc matrix [4x4] for this element using node-specific alfa
+        auto localHbc = element.calculateHbcMatrix(nodeX, nodeY, nodeAlfa, boundaryEdges);
         
-        // Calculate local P vector [4] for this element
-        auto localP = element.calculatePVector(nodeX, nodeY, alfa, tot, boundaryEdges);
+        // Calculate local P vector [4] for this element using node-specific alfa and tot
+        auto localP = element.calculatePVector(nodeX, nodeY, nodeAlfa, nodeTot, boundaryEdges);
         
         // Aggregate local H and Hbc matrices into global matrices
         // Map from local element indices (0-3) to global node indices

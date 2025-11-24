@@ -558,6 +558,197 @@ std::vector<double> Element::calculatePVector(const std::vector<double>& nodeX,
     return P;
 }
 
+// New overloaded method with node-specific alfa values
+std::vector<std::vector<double>> Element::calculateHbcMatrix(const std::vector<double>& nodeX,
+                                                            const std::vector<double>& nodeY,
+                                                            const std::vector<double>& nodeAlfa,
+                                                            const std::vector<bool>& boundaryEdges) const {
+    // Initialize 4x4 Hbc matrix with zeros
+    std::vector<std::vector<double>> Hbc(4, std::vector<double>(4, 0.0));
+    
+    // 2-point Gaussian integration for 1D (edge integration)
+    double gaussPoint1D = 1.0 / std::sqrt(3.0);
+    std::vector<double> gaussPoints1D = {-gaussPoint1D, gaussPoint1D};
+    std::vector<double> weights1D = {1.0, 1.0};
+    
+    // Process each edge
+    for (int edge = 0; edge < 4; ++edge) {
+        if (!boundaryEdges[edge]) continue;
+        
+        // Define which local nodes are on this edge and the parametric coordinate
+        std::vector<int> edgeNodes(2);
+        int fixedCoord; // 0 for xi, 1 for eta
+        double fixedValue;
+        
+        if (edge == 0) { // Bottom edge: nodes 0-1, eta = -1
+            edgeNodes = {0, 1};
+            fixedCoord = 1; // eta is fixed
+            fixedValue = -1.0;
+        } else if (edge == 1) { // Right edge: nodes 1-2, xi = 1
+            edgeNodes = {1, 2};
+            fixedCoord = 0; // xi is fixed
+            fixedValue = 1.0;
+        } else if (edge == 2) { // Top edge: nodes 2-3, eta = 1
+            edgeNodes = {2, 3};
+            fixedCoord = 1; // eta is fixed
+            fixedValue = 1.0;
+        } else { // edge == 3, Left edge: nodes 3-0, xi = -1
+            edgeNodes = {3, 0};
+            fixedCoord = 0; // xi is fixed
+            fixedValue = -1.0;
+        }
+        
+        // Integrate along the edge using 2-point Gaussian quadrature
+        for (size_t gp = 0; gp < gaussPoints1D.size(); ++gp) {
+            double xi, eta;
+            
+            if (fixedCoord == 0) { // xi is fixed
+                xi = fixedValue;
+                eta = gaussPoints1D[gp];
+            } else { // eta is fixed
+                xi = gaussPoints1D[gp];
+                eta = fixedValue;
+            }
+            
+            // Calculate shape functions at this integration point
+            std::vector<double> N = {N1(xi, eta), N2(xi, eta), N3(xi, eta), N4(xi, eta)};
+            
+            // Calculate edge length element (detJ for 1D)
+            double detJ_edge;
+            
+            if (fixedCoord == 0) { // xi is fixed, eta varies
+                double dx_deta = dN1_dEta(xi, eta) * nodeX[0] + dN2_dEta(xi, eta) * nodeX[1] +
+                                dN3_dEta(xi, eta) * nodeX[2] + dN4_dEta(xi, eta) * nodeX[3];
+                double dy_deta = dN1_dEta(xi, eta) * nodeY[0] + dN2_dEta(xi, eta) * nodeY[1] +
+                                dN3_dEta(xi, eta) * nodeY[2] + dN4_dEta(xi, eta) * nodeY[3];
+                detJ_edge = std::sqrt(dx_deta * dx_deta + dy_deta * dy_deta);
+            } else { // eta is fixed, xi varies
+                double dx_dxi = dN1_dXi(xi, eta) * nodeX[0] + dN2_dXi(xi, eta) * nodeX[1] +
+                               dN3_dXi(xi, eta) * nodeX[2] + dN4_dXi(xi, eta) * nodeX[3];
+                double dy_dxi = dN1_dXi(xi, eta) * nodeY[0] + dN2_dXi(xi, eta) * nodeY[1] +
+                               dN3_dXi(xi, eta) * nodeY[2] + dN4_dXi(xi, eta) * nodeY[3];
+                detJ_edge = std::sqrt(dx_dxi * dx_dxi + dy_dxi * dy_dxi);
+            }
+            
+            double weight = weights1D[gp];
+            
+            // Calculate alfa at this integration point using shape functions
+            double alfa_at_point = 0.0;
+            for (int k = 0; k < 4; ++k) {
+                alfa_at_point += N[k] * nodeAlfa[k];
+            }
+            
+            // Calculate contribution: alfa(xi,eta) * N * N^T * detJ_edge * weight
+            for (int i = 0; i < 4; ++i) {
+                for (int j = 0; j < 4; ++j) {
+                    Hbc[i][j] += alfa_at_point * N[i] * N[j] * detJ_edge * weight;
+                }
+            }
+        }
+    }
+    
+    return Hbc;
+}
+
+// New overloaded method with node-specific alfa and tot values
+std::vector<double> Element::calculatePVector(const std::vector<double>& nodeX,
+                                               const std::vector<double>& nodeY,
+                                               const std::vector<double>& nodeAlfa,
+                                               const std::vector<double>& nodeTot,
+                                               const std::vector<bool>& boundaryEdges) const {
+    // Initialize 4-element P vector with zeros
+    std::vector<double> P(4, 0.0);
+    
+    // Edge definitions for 4-node quadrilateral:
+    // Edge 0 (bottom): nodes 1-2 (local 0-1), eta = -1
+    // Edge 1 (right):  nodes 2-3 (local 1-2), xi = 1
+    // Edge 2 (top):    nodes 3-4 (local 2-3), eta = 1
+    // Edge 3 (left):   nodes 4-1 (local 3-0), xi = -1
+    
+    // 2-point Gaussian integration for 1D (edge integration)
+    double gaussPoint1D = 1.0 / std::sqrt(3.0);
+    std::vector<double> gaussPoints1D = {-gaussPoint1D, gaussPoint1D};
+    std::vector<double> weights1D = {1.0, 1.0};
+    
+    // Process each edge
+    for (int edge = 0; edge < 4; ++edge) {
+        if (!boundaryEdges[edge]) continue;
+        
+        // Define which local nodes are on this edge and the parametric coordinate
+        std::vector<int> edgeNodes(2);
+        int fixedCoord; // 0 for xi, 1 for eta
+        double fixedValue;
+        
+        if (edge == 0) { // Bottom edge: nodes 0-1, eta = -1
+            edgeNodes = {0, 1};
+            fixedCoord = 1; // eta is fixed
+            fixedValue = -1.0;
+        } else if (edge == 1) { // Right edge: nodes 1-2, xi = 1
+            edgeNodes = {1, 2};
+            fixedCoord = 0; // xi is fixed
+            fixedValue = 1.0;
+        } else if (edge == 2) { // Top edge: nodes 2-3, eta = 1
+            edgeNodes = {2, 3};
+            fixedCoord = 1; // eta is fixed
+            fixedValue = 1.0;
+        } else { // edge == 3, Left edge: nodes 3-0, xi = -1
+            edgeNodes = {3, 0};
+            fixedCoord = 0; // xi is fixed
+            fixedValue = -1.0;
+        }
+        
+        // Integrate along the edge using 2-point Gaussian quadrature
+        for (size_t gp = 0; gp < gaussPoints1D.size(); ++gp) {
+            double xi, eta;
+            
+            if (fixedCoord == 0) { // xi is fixed
+                xi = fixedValue;
+                eta = gaussPoints1D[gp];
+            } else { // eta is fixed
+                xi = gaussPoints1D[gp];
+                eta = fixedValue;
+            }
+            
+            // Calculate shape functions at this integration point
+            std::vector<double> N = {N1(xi, eta), N2(xi, eta), N3(xi, eta), N4(xi, eta)};
+            
+            // Calculate edge length element (detJ for 1D)
+            double detJ_edge;
+            
+            if (fixedCoord == 0) { // xi is fixed, eta varies
+                double dx_deta = dN1_dEta(xi, eta) * nodeX[0] + dN2_dEta(xi, eta) * nodeX[1] +
+                                dN3_dEta(xi, eta) * nodeX[2] + dN4_dEta(xi, eta) * nodeX[3];
+                double dy_deta = dN1_dEta(xi, eta) * nodeY[0] + dN2_dEta(xi, eta) * nodeY[1] +
+                                dN3_dEta(xi, eta) * nodeY[2] + dN4_dEta(xi, eta) * nodeY[3];
+                detJ_edge = std::sqrt(dx_deta * dx_deta + dy_deta * dy_deta);
+            } else { // eta is fixed, xi varies
+                double dx_dxi = dN1_dXi(xi, eta) * nodeX[0] + dN2_dXi(xi, eta) * nodeX[1] +
+                               dN3_dXi(xi, eta) * nodeX[2] + dN4_dXi(xi, eta) * nodeX[3];
+                double dy_dxi = dN1_dXi(xi, eta) * nodeY[0] + dN2_dXi(xi, eta) * nodeY[1] +
+                               dN3_dXi(xi, eta) * nodeY[2] + dN4_dXi(xi, eta) * nodeY[3];
+                detJ_edge = std::sqrt(dx_dxi * dx_dxi + dy_dxi * dy_dxi);
+            }
+            
+            double weight = weights1D[gp];
+            
+            // Calculate alfa and tot at this integration point using shape functions
+            double alfa_at_point = 0.0;
+            double tot_at_point = 0.0;
+            for (int k = 0; k < 4; ++k) {
+                alfa_at_point += N[k] * nodeAlfa[k];
+                tot_at_point += N[k] * nodeTot[k];
+            }
+            
+            // Calculate contribution: alfa(xi,eta) * tot(xi,eta) * N * detJ_edge * weight
+            for (int i = 0; i < 4; ++i) {
+                P[i] += alfa_at_point * tot_at_point * N[i] * detJ_edge * weight;
+            }
+        }
+    }
+    
+    return P;
+}
+
 std::ostream& operator<<(std::ostream& os, const Element& element) {
     os << "Element " << std::setw(3) << element.id << " [" << element.type << "]: ";
     for (size_t i = 0; i < element.nodeIds.size(); ++i) {
