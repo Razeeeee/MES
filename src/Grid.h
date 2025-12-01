@@ -6,18 +6,6 @@
 #include <vector>
 #include <string>
 #include <set>
-#include <map>
-
-/**
- * @brief Structure to hold boundary condition parameters for a node
- */
-struct BoundaryCondition {
-    double alfa;
-    double tot;
-    
-    BoundaryCondition() : alfa(0.0), tot(0.0) {}
-    BoundaryCondition(double a, double t) : alfa(a), tot(t) {}
-};
 
 /**
  * @brief Main grid class that manages the finite element mesh
@@ -29,8 +17,7 @@ class Grid {
 private:
     std::vector<Node> nodes;
     std::vector<Element> elements;
-    std::set<int> boundaryConditions; // For backward compatibility - simple BC format
-    std::map<int, BoundaryCondition> boundaryConditionsMap; // New format with node-specific parameters
+    std::set<int> boundaryConditions;
     GlobalData globalData;
     std::string filename;
 
@@ -55,13 +42,8 @@ public:
     const std::vector<Node>& getNodes() const { return nodes; }
     const std::vector<Element>& getElements() const { return elements; }
     const std::set<int>& getBoundaryConditions() const { return boundaryConditions; }
-    const std::map<int, BoundaryCondition>& getBoundaryConditionsMap() const { return boundaryConditionsMap; }
     const GlobalData& getGlobalData() const { return globalData; }
     const std::string& getFilename() const { return filename; }
-    
-    // Get boundary condition parameters for a specific node
-    // Returns true if node has BC, fills alfa and tot parameters
-    bool getNodeBoundaryCondition(int nodeId, double& alfa, double& tot) const;
     
     // Utility methods
     Node* findNodeById(int id);

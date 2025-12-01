@@ -119,13 +119,6 @@ public:
                                                         double alfa,
                                                         const std::vector<bool>& boundaryEdges) const;
     
-    // Calculate Hbc matrix with node-specific alfa values
-    // nodeAlfa - alfa value for each node (4 values)
-    std::vector<std::vector<double>> calculateHbcMatrix(const std::vector<double>& nodeX,
-                                                        const std::vector<double>& nodeY,
-                                                        const std::vector<double>& nodeAlfa,
-                                                        const std::vector<bool>& boundaryEdges) const;
-    
     // Calculate P vector for boundary conditions
     // P = alfa * tot * N * detJ
     // Only calculates for edges with boundary conditions
@@ -137,15 +130,6 @@ public:
                                         const std::vector<double>& nodeY,
                                         double alfa,
                                         double tot,
-                                        const std::vector<bool>& boundaryEdges) const;
-    
-    // Calculate P vector with node-specific alfa and tot values
-    // nodeAlfa - alfa value for each node (4 values)
-    // nodeTot - tot value for each node (4 values)
-    std::vector<double> calculatePVector(const std::vector<double>& nodeX,
-                                        const std::vector<double>& nodeY,
-                                        const std::vector<double>& nodeAlfa,
-                                        const std::vector<double>& nodeTot,
                                         const std::vector<bool>& boundaryEdges) const;
     
     // Friend operator for output stream
