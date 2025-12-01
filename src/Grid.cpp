@@ -256,6 +256,8 @@ EquationSystem Grid::assembleGlobalEquationSystem(int numGaussPoints) const {
     double conductivity = globalData.getConductivity();
     double alfa = globalData.getAlfa();
     double tot = globalData.getTot();
+    double density = globalData.getDensity();
+    double specificHeat = globalData.getSpecificHeat();
     
     // Iterate through all elements
     for (const auto& element : elements) {
@@ -279,6 +281,9 @@ EquationSystem Grid::assembleGlobalEquationSystem(int numGaussPoints) const {
         // Calculate local Hbc matrix [4x4] for this element
         auto localHbc = element.calculateHbcMatrix(nodeX, nodeY, alfa, boundaryEdges);
         
+        // Calculate local C matrix [4x4] for this element
+        auto localC = element.calculateCMatrix(nodeX, nodeY, density, specificHeat, numGaussPoints);
+        
         // Calculate local P vector [4] for this element
         auto localP = element.calculatePVector(nodeX, nodeY, alfa, tot, boundaryEdges);
         
@@ -296,6 +301,7 @@ EquationSystem Grid::assembleGlobalEquationSystem(int numGaussPoints) const {
                 // Add local contributions to global matrices
                 eqSystem.addToHMatrix(globalI, globalJ, localH[i][j]);
                 eqSystem.addToHbcMatrix(globalI, globalJ, localHbc[i][j]);
+                eqSystem.addToCMatrix(globalI, globalJ, localC[i][j]);
             }
         }
     }

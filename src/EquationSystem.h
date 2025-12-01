@@ -17,6 +17,7 @@ class EquationSystem {
 private:
     std::vector<std::vector<double>> H_global;  // Global H matrix [N x N]
     std::vector<std::vector<double>> Hbc_global; // Global Hbc matrix [N x N]
+    std::vector<std::vector<double>> C_global;   // Global C matrix [N x N]
     std::vector<double> P_global;                // Global P vector [N]
     int systemSize;                              // Number of nodes (N)
 
@@ -33,6 +34,11 @@ public:
     void addToHbcMatrix(int i, int j, double value);
     void initializeHbcMatrix(int size);
     
+    // C matrix operations
+    void setCMatrix(const std::vector<std::vector<double>>& C);
+    void addToCMatrix(int i, int j, double value);
+    void initializeCMatrix(int size);
+    
     // P vector operations
     void setPVector(const std::vector<double>& P);
     void addToPVector(int i, double value);
@@ -41,6 +47,7 @@ public:
     // Getters
     const std::vector<std::vector<double>>& getHMatrix() const { return H_global; }
     const std::vector<std::vector<double>>& getHbcMatrix() const { return Hbc_global; }
+    const std::vector<std::vector<double>>& getCMatrix() const { return C_global; }
     const std::vector<double>& getPVector() const { return P_global; }
     std::vector<std::vector<double>> getHTotalMatrix() const; // Returns H + Hbc
     int getSystemSize() const { return systemSize; }
@@ -48,6 +55,7 @@ public:
     // Display methods
     void printHMatrix() const;
     void printHbcMatrix() const;
+    void printCMatrix() const;
     void printHTotalMatrix() const; // Print H + Hbc
     void printPVector() const; // Print P vector
     void printSystemInfo() const;
@@ -56,6 +64,14 @@ public:
     // Solve the equation system [H+Hbc]{t} = -{P}
     // Returns temperature vector {t}
     std::vector<double> solve() const;
+    
+    // Solve transient heat transfer equation using time stepping
+    // ([C]/dt + [H+Hbc]){t^(i+1)} = ([C]/dt){t^(i)} + {P}
+    // Returns vector of temperature solutions for each time step
+    std::vector<std::vector<double>> solveTransient(double simulationTime, 
+                                                    double stepTime,
+                                                    double initialTemp) const;
+    
     void printSolution(const std::vector<double>& temperatures) const;
     
     // Matrix properties

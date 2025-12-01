@@ -1,4 +1,5 @@
 #include "Element.h"
+#include "GaussianIntegration.h"
 #include <iomanip>
 #include <cmath>
 
@@ -556,6 +557,63 @@ std::vector<double> Element::calculatePVector(const std::vector<double>& nodeX,
     }
     
     return P;
+}
+
+std::vector<std::vector<double>> Element::calculateCMatrix(const std::vector<double>& nodeX,
+                                                           const std::vector<double>& nodeY,
+                                                           double density,
+                                                           double specificHeat,
+                                                           int numGaussPoints) const {
+    // Initialize 4x4 C matrix with zeros
+    std::vector<std::vector<double>> C(4, std::vector<double>(4, 0.0));
+    
+    // Get Gaussian integration points and weights
+    std::vector<double> gaussPoints, weights;
+    
+    if (numGaussPoints == 2) {
+        double gp = 1.0 / std::sqrt(3.0);
+        gaussPoints = {-gp, gp};
+        weights = {1.0, 1.0};
+    } else if (numGaussPoints == 3) {
+        gaussPoints = {-std::sqrt(3.0/5.0), 0.0, std::sqrt(3.0/5.0)};
+        weights = {5.0/9.0, 8.0/9.0, 5.0/9.0};
+    } else {
+        throw std::runtime_error("Invalid number of Gauss points. Use 2 or 3.");
+    }
+    
+    // Iterate through all integration points (2D: numGaussPoints x numGaussPoints)
+    for (size_t ip_xi = 0; ip_xi < gaussPoints.size(); ++ip_xi) {
+        for (size_t ip_eta = 0; ip_eta < gaussPoints.size(); ++ip_eta) {
+            double xi = gaussPoints[ip_xi];
+            double eta = gaussPoints[ip_eta];
+            double weight_xi = weights[ip_xi];
+            double weight_eta = weights[ip_eta];
+            
+            // Calculate shape functions at this integration point
+            std::vector<double> N(4);
+            N[0] = N1(xi, eta);
+            N[1] = N2(xi, eta);
+            N[2] = N3(xi, eta);
+            N[3] = N4(xi, eta);
+            
+            // Calculate Jacobian at this integration point
+            auto jacobianData = calculateJacobian(nodeX, nodeY, xi, eta);
+            double detJ = calculateDetJ(jacobianData);
+            
+            // Calculate C contribution at this integration point
+            // C = density * specificHeat * N * transpose(N) * detJ * weight
+            double factor = density * specificHeat * detJ * weight_xi * weight_eta;
+            
+            // Build N * transpose(N) and add to C matrix
+            for (int i = 0; i < 4; ++i) {
+                for (int j = 0; j < 4; ++j) {
+                    C[i][j] += factor * N[i] * N[j];
+                }
+            }
+        }
+    }
+    
+    return C;
 }
 
 std::ostream& operator<<(std::ostream& os, const Element& element) {

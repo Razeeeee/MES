@@ -132,6 +132,19 @@ public:
                                         double tot,
                                         const std::vector<bool>& boundaryEdges) const;
     
+    // Calculate C matrix for heat capacity
+    // C = density * specificHeat * N * transpose(N) * detJ
+    // Sums contributions from all integration points
+    // Parameters: nodeX, nodeY - coordinates of element nodes
+    //            density - material density
+    //            specificHeat - specific heat capacity
+    //            numGaussPoints - number of Gauss integration points (2 or 3)
+    std::vector<std::vector<double>> calculateCMatrix(const std::vector<double>& nodeX,
+                                                      const std::vector<double>& nodeY,
+                                                      double density,
+                                                      double specificHeat,
+                                                      int numGaussPoints) const;
+    
     // Friend operator for output stream
     friend std::ostream& operator<<(std::ostream& os, const Element& element);
 };

@@ -4,8 +4,10 @@
 #include "GridSelector.h"
 #include <iostream>
 #include <iomanip>
+#include <fstream>
 #include <cmath>
 #include <cstdlib>
+#include <limits>
 
 // Helper function to clean up numerical errors (round very small values to zero)
 double cleanValue(double value, double tolerance = 1e-10) {
@@ -138,6 +140,12 @@ int main() {
             auto Hbc_matrix = element.calculateHbcMatrix(nodeX, nodeY, alfa, boundaryEdges);
             printMatrix(Hbc_matrix, "Local Hbc Matrix [4x4]");
             
+            // Calculate and display C matrix
+            double density = globalData.getDensity();
+            double specificHeat = globalData.getSpecificHeat();
+            auto C_matrix = element.calculateCMatrix(nodeX, nodeY, density, specificHeat, 2);
+            printMatrix(C_matrix, "Local C Matrix [4x4]");
+            
             // Calculate and display P vector
             double tot = globalData.getTot();
             auto P_vector = element.calculatePVector(nodeX, nodeY, alfa, tot, boundaryEdges);
@@ -162,6 +170,11 @@ int main() {
     
     // Print the global Hbc matrix
     eqSystem.printHbcMatrix();
+    
+    std::cout << "\n" << std::string(80, '=') << "\n\n";
+    
+    // Print the global C matrix
+    eqSystem.printCMatrix();
     
     std::cout << "\n" << std::string(80, '=') << "\n\n";
     
@@ -197,11 +210,121 @@ int main() {
     
     std::cout << "\n" << std::string(80, '=') << "\n\n";
     
+    // =========================================================
+    // TRANSIENT ANALYSIS (Time-dependent solution)
+    // =========================================================
+    
+    std::cout << "=== TRANSIENT HEAT TRANSFER ANALYSIS ===\n\n";
+    
+    // Get time parameters from global data
+    double simulationTime = globalData.getSimulationTime();
+    double stepTime = globalData.getSimulationStepTime();
+    double initialTemp = globalData.getInitialTemp();
+    
+    // Solve transient heat transfer equation
+    auto temperatureHistory = eqSystem.solveTransient(simulationTime, stepTime, initialTemp);
+    
+    // Display final temperature distribution
+    std::cout << "\n=== FINAL TEMPERATURE DISTRIBUTION (t = " << simulationTime << " s) ===\n\n";
+    eqSystem.printSolution(temperatureHistory.back());
+    
+    std::cout << "\n" << std::string(80, '=') << "\n\n";
+    
+    // Display temperature at intermediate time steps
+    std::cout << "=== TEMPERATURE HISTORY ===\n\n";
+    int numSteps = temperatureHistory.size();
+    std::cout << "Total time steps: " << numSteps << "\n\n";
+    
+    // Track min and max temperatures throughout the entire simulation
+    double minTemp = std::numeric_limits<double>::max();
+    double maxTemp = std::numeric_limits<double>::lowest();
+    int minTempNode = -1;
+    int maxTempNode = -1;
+    double minTempTime = 0.0;
+    double maxTempTime = 0.0;
+    int minTempElement = -1;
+    int maxTempElement = -1;
+    
+    // Analyze all time steps to find global min/max
+    for (int step = 0; step < numSteps; ++step) {
+        double time = step * stepTime;
+        const auto& temps = temperatureHistory[step];
+        
+        for (size_t i = 0; i < temps.size(); ++i) {
+            if (temps[i] < minTemp) {
+                minTemp = temps[i];
+                minTempNode = i + 1;  // Node IDs are 1-based
+                minTempTime = time;
+            }
+            if (temps[i] > maxTemp) {
+                maxTemp = temps[i];
+                maxTempNode = i + 1;  // Node IDs are 1-based
+                maxTempTime = time;
+            }
+        }
+    }
+    
+    // Find which element contains the min/max temperature nodes
+    for (const auto& element : elements) {
+        const auto& nodeIds = element.getNodeIds();
+        for (int nodeId : nodeIds) {
+            if (nodeId == minTempNode) {
+                minTempElement = element.getId();
+            }
+            if (nodeId == maxTempNode) {
+                maxTempElement = element.getId();
+            }
+        }
+    }
+    
+    // Display global min/max temperature information
+    std::cout << "=== GLOBAL TEMPERATURE EXTREMES (ENTIRE SIMULATION) ===\n\n";
+    std::cout << "Minimum Temperature:\n";
+    std::cout << "  Temperature: " << std::fixed << std::setprecision(4) << minTemp << " °C\n";
+    std::cout << "  Node:        " << minTempNode << "\n";
+    std::cout << "  Element:     " << minTempElement << "\n";
+    std::cout << "  Time:        " << std::fixed << std::setprecision(1) << minTempTime << " s\n\n";
+    
+    std::cout << "Maximum Temperature:\n";
+    std::cout << "  Temperature: " << std::fixed << std::setprecision(4) << maxTemp << " °C\n";
+    std::cout << "  Node:        " << maxTempNode << "\n";
+    std::cout << "  Element:     " << maxTempElement << "\n";
+    std::cout << "  Time:        " << std::fixed << std::setprecision(1) << maxTempTime << " s\n\n";
+    
+    std::cout << std::string(80, '-') << "\n\n";
+    
+    // Show temperatures at selected nodes for each time step
+    std::vector<int> displayNodes = {1, 4, 13, 16}; // Corner nodes
+    std::cout << "Time [s] | ";
+    for (int nodeId : displayNodes) {
+        std::cout << "Node " << std::setw(2) << nodeId << " [°C] | ";
+    }
+    std::cout << "\n" << std::string(80, '-') << "\n";
+    
+    for (int step = 0; step < numSteps; ++step) {
+        double time = step * stepTime;
+        std::cout << std::setw(8) << std::fixed << std::setprecision(1) << time << " | ";
+        for (int nodeId : displayNodes) {
+            if (nodeId - 1 < static_cast<int>(temperatureHistory[step].size())) {
+                std::cout << std::setw(13) << std::fixed << std::setprecision(4) 
+                         << temperatureHistory[step][nodeId - 1] << " | ";
+            }
+        }
+        std::cout << "\n";
+    }
+    
+    std::cout << "\n" << std::string(80, '=') << "\n\n";
+    
+    // =========================================================
+    // STEADY-STATE ANALYSIS (for comparison)
+    // =========================================================
+    
     // Solve the equation system [H+Hbc]{t} = {P}
-    std::cout << "Solving the equation system [H+Hbc]{t} = {P}...\n\n";
+    std::cout << "Solving the steady-state equation system [H+Hbc]{t} = {P}...\n\n";
     auto temperatures = eqSystem.solve();
     
     // Display the solution
+    std::cout << "=== STEADY-STATE TEMPERATURE DISTRIBUTION ===\n\n";
     eqSystem.printSolution(temperatures);
     
     std::cout << "\n" << std::string(80, '=') << "\n\n";
@@ -210,16 +333,54 @@ int main() {
     std::string outputFile = "results.csv";
     eqSystem.exportResults(outputFile, temperatures, nodes);
     
+    // Export transient results to CSV
+    std::string transientOutputFile = "results_transient.csv";
+    std::ofstream transientFile(transientOutputFile);
+    if (transientFile.is_open()) {
+        // Write header with time steps
+        transientFile << "node_id,x,y";
+        for (size_t step = 0; step < temperatureHistory.size(); ++step) {
+            transientFile << ",t_" << (step * stepTime);
+        }
+        transientFile << "\n";
+        
+        // Write data for each node
+        for (size_t i = 0; i < nodes.size(); ++i) {
+            transientFile << (i + 1) << ","
+                         << std::fixed << std::setprecision(10) << nodes[i].getX() << ","
+                         << std::fixed << std::setprecision(10) << nodes[i].getY();
+            
+            for (const auto& temps : temperatureHistory) {
+                if (i < temps.size()) {
+                    transientFile << "," << std::fixed << std::setprecision(6) << temps[i];
+                }
+            }
+            transientFile << "\n";
+        }
+        transientFile.close();
+        std::cout << "Transient results exported to: " << transientOutputFile << "\n";
+    }
+    
     std::cout << "\n" << std::string(80, '=') << "\n\n";
     
-    // Launch Python visualization
-    std::cout << "Launching temperature visualization...\n";
+    // Launch Python visualization for steady-state
+    std::cout << "Launching steady-state temperature visualization...\n";
     std::string pythonCmd = "python3 visualize_temperature.py " + outputFile + " " + gridFile;
     int result = system(pythonCmd.c_str());
     
     if (result != 0) {
-        std::cerr << "\nNote: Visualization failed. Make sure matplotlib and numpy are installed.\n";
+        std::cerr << "\nNote: Steady-state visualization failed. Make sure matplotlib and numpy are installed.\n";
         std::cerr << "You can manually run: python3 visualize_temperature.py " << outputFile << " " << gridFile << "\n";
+    }
+    
+    // Launch Python visualization for transient analysis
+    std::cout << "\nLaunching transient temperature visualization with time slider...\n";
+    std::string pythonCmdTransient = "python3 visualize_temperature_transient.py " + transientOutputFile + " " + gridFile;
+    int resultTransient = system(pythonCmdTransient.c_str());
+    
+    if (resultTransient != 0) {
+        std::cerr << "\nNote: Transient visualization failed. Make sure matplotlib and numpy are installed.\n";
+        std::cerr << "You can manually run: python3 visualize_temperature_transient.py " << transientOutputFile << " " << gridFile << "\n";
     }
     
     std::cout << "\n" << std::string(80, '=') << "\n\n";

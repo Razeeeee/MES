@@ -15,6 +15,7 @@ EquationSystem::EquationSystem() : systemSize(0) {}
 EquationSystem::EquationSystem(int size) : systemSize(size) {
     initializeHMatrix(size);
     initializeHbcMatrix(size);
+    initializeCMatrix(size);
     initializePVector(size);
 }
 
@@ -28,6 +29,12 @@ void EquationSystem::initializeHbcMatrix(int size) {
     systemSize = size;
     Hbc_global.clear();
     Hbc_global.resize(size, std::vector<double>(size, 0.0));
+}
+
+void EquationSystem::initializeCMatrix(int size) {
+    systemSize = size;
+    C_global.clear();
+    C_global.resize(size, std::vector<double>(size, 0.0));
 }
 
 void EquationSystem::initializePVector(int size) {
@@ -59,6 +66,19 @@ void EquationSystem::setHbcMatrix(const std::vector<std::vector<double>>& Hbc) {
 void EquationSystem::addToHbcMatrix(int i, int j, double value) {
     if (i >= 0 && i < systemSize && j >= 0 && j < systemSize) {
         Hbc_global[i][j] += value;
+    }
+}
+
+void EquationSystem::setCMatrix(const std::vector<std::vector<double>>& C) {
+    C_global = C;
+    if (!C_global.empty()) {
+        systemSize = C_global.size();
+    }
+}
+
+void EquationSystem::addToCMatrix(int i, int j, double value) {
+    if (i >= 0 && i < systemSize && j >= 0 && j < systemSize) {
+        C_global[i][j] += value;
     }
 }
 
@@ -132,6 +152,31 @@ void EquationSystem::printHbcMatrix() const {
         std::cout << "Node " << std::setw(2) << (i+1) << " ";
         for (size_t j = 0; j < Hbc_global[i].size(); ++j) {
             std::cout << std::setw(8) << std::fixed << std::setprecision(3) << cleanValue(Hbc_global[i][j]);
+        }
+        std::cout << "\n";
+    }
+}
+
+void EquationSystem::printCMatrix() const {
+    if (C_global.empty()) {
+        std::cout << "C matrix is empty.\n";
+        return;
+    }
+    
+    std::cout << "Global C Matrix [" << C_global.size() << " x " << C_global[0].size() << "]:\n\n";
+    
+    // Print column headers
+    std::cout << "        ";
+    for (size_t j = 0; j < C_global[0].size(); ++j) {
+        std::cout << std::setw(8) << ("Node " + std::to_string(j+1));
+    }
+    std::cout << "\n";
+    
+    // Print matrix with row headers
+    for (size_t i = 0; i < C_global.size(); ++i) {
+        std::cout << "Node " << std::setw(2) << (i+1) << " ";
+        for (size_t j = 0; j < C_global[i].size(); ++j) {
+            std::cout << std::setw(8) << std::fixed << std::setprecision(3) << cleanValue(C_global[i][j]);
         }
         std::cout << "\n";
     }
@@ -356,4 +401,124 @@ void EquationSystem::exportResults(const std::string& filename,
     
     file.close();
     std::cout << "Results exported to: " << filename << "\n";
+}
+
+std::vector<std::vector<double>> EquationSystem::solveTransient(double simulationTime, 
+                                                                double stepTime,
+                                                                double initialTemp) const {
+    int n = systemSize;
+    int numSteps = static_cast<int>(simulationTime / stepTime);
+    
+    std::cout << "\n" << std::string(80, '=') << "\n";
+    std::cout << "=== TRANSIENT HEAT TRANSFER SIMULATION ===\n";
+    std::cout << std::string(80, '=') << "\n\n";
+    std::cout << "Simulation time: " << simulationTime << " s\n";
+    std::cout << "Time step: " << stepTime << " s\n";
+    std::cout << "Number of time steps: " << numSteps << "\n";
+    std::cout << "Initial temperature: " << initialTemp << " °C\n\n";
+    
+    // Store temperature solutions for each time step
+    std::vector<std::vector<double>> temperatureHistory;
+    
+    // Initialize temperature vector with initial temperature
+    std::vector<double> t_current(n, initialTemp);
+    temperatureHistory.push_back(t_current);
+    
+    // Pre-compute [C]/dt + [H+Hbc] (left-hand side matrix)
+    std::vector<std::vector<double>> LHS(n, std::vector<double>(n, 0.0));
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            LHS[i][j] = C_global[i][j] / stepTime + H_global[i][j] + Hbc_global[i][j];
+        }
+    }
+    
+    // Time stepping loop
+    for (int step = 1; step <= numSteps; ++step) {
+        double currentTime = step * stepTime;
+        
+        std::cout << "Computing time step " << step << "/" << numSteps 
+                  << " (t = " << currentTime << " s)...\n";
+        
+        // Compute right-hand side: ([C]/dt){t^(i)} + {P}
+        std::vector<double> RHS(n, 0.0);
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < n; ++j) {
+                RHS[i] += (C_global[i][j] / stepTime) * t_current[j];
+            }
+            RHS[i] += P_global[i];
+        }
+        
+        // Solve: [LHS]{t^(i+1)} = {RHS}
+        // Create augmented matrix [LHS | RHS]
+        std::vector<std::vector<double>> A(n, std::vector<double>(n + 1));
+        for (int i = 0; i < n; ++i) {
+            for (int j = 0; j < n; ++j) {
+                A[i][j] = LHS[i][j];
+            }
+            A[i][n] = RHS[i];
+        }
+        
+        // Gaussian elimination with partial pivoting
+        for (int k = 0; k < n - 1; ++k) {
+            // Find pivot
+            int pivotRow = k;
+            double maxVal = std::abs(A[k][k]);
+            
+            for (int i = k + 1; i < n; ++i) {
+                if (std::abs(A[i][k]) > maxVal) {
+                    maxVal = std::abs(A[i][k]);
+                    pivotRow = i;
+                }
+            }
+            
+            // Swap rows if necessary
+            if (pivotRow != k) {
+                std::swap(A[k], A[pivotRow]);
+            }
+            
+            // Check for singular matrix
+            if (std::abs(A[k][k]) < 1e-12) {
+                std::cerr << "Warning: Matrix is singular at row " << k << "\n";
+                continue;
+            }
+            
+            // Eliminate column k
+            for (int i = k + 1; i < n; ++i) {
+                double factor = A[i][k] / A[k][k];
+                for (int j = k; j <= n; ++j) {
+                    A[i][j] -= factor * A[k][j];
+                }
+            }
+        }
+        
+        // Back substitution
+        std::vector<double> t_next(n);
+        for (int i = n - 1; i >= 0; --i) {
+            double sum = A[i][n];
+            for (int j = i + 1; j < n; ++j) {
+                sum -= A[i][j] * t_next[j];
+            }
+            
+            if (std::abs(A[i][i]) < 1e-12) {
+                std::cerr << "Warning: Zero diagonal element at row " << i << "\n";
+                t_next[i] = 0.0;
+            } else {
+                t_next[i] = sum / A[i][i];
+            }
+        }
+        
+        // Clean up numerical errors
+        for (int i = 0; i < n; ++i) {
+            t_next[i] = cleanValue(t_next[i]);
+        }
+        
+        // Update current temperature and store
+        t_current = t_next;
+        temperatureHistory.push_back(t_current);
+    }
+    
+    std::cout << "\nTransient simulation completed.\n";
+    std::cout << std::string(80, '=') << "\n\n";
+    
+    return temperatureHistory;
 }
