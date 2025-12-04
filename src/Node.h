@@ -16,14 +16,14 @@ public:
     Node(int id, double x, double y);
     
     // Getters
-    int getId() const { return id; }
-    double getX() const { return x; }
-    double getY() const { return y; }
+    int getId() const noexcept { return id; }
+    double getX() const noexcept { return x; }
+    double getY() const noexcept { return y; }
     
     // Setters
-    void setId(int id) { this->id = id; }
-    void setX(double x) { this->x = x; }
-    void setY(double y) { this->y = y; }
+    void setId(int id) noexcept { this->id = id; }
+    void setX(double x) noexcept { this->x = x; }
+    void setY(double y) noexcept { this->y = y; }
     
     // Display node information
     void print() const;

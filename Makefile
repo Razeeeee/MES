@@ -1,4 +1,4 @@
-.PHONY: build run build-run clean init help
+.PHONY: build run dev clean init docs help
 
 # Default target
 all: build
@@ -23,6 +23,13 @@ clean:
 	@chmod +x scripts/clean.sh
 	@./scripts/clean.sh
 
+# Build PDF documentation from LaTeX
+docs:
+	@echo "Compiling LaTeX documentation..."
+	@cd notes && pdflatex -interaction=nonstopmode fem_implementation_summary.tex > /dev/null
+	@cd notes && pdflatex -interaction=nonstopmode fem_implementation_summary.tex > /dev/null
+	@echo "Documentation generated: notes/fem_implementation_summary.pdf"
+
 # Initialize project permissions (run this on a new machine)
 init:
 	@echo "Setting script permissions..."
@@ -35,5 +42,6 @@ help:
 	@echo "  make init      - Set script permissions"
 	@echo "  make build     - Build project"
 	@echo "  make run       - Run executable"
-	@echo "  make build-run - Build and run"
+	@echo "  make dev       - Build and run"
 	@echo "  make clean     - Remove build files"
+	@echo "  make docs      - Compile LaTeX documentation"

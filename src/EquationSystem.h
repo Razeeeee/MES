@@ -2,30 +2,23 @@
 #include <vector>
 #include <string>
 
-// Forward declaration
-class Node;
-
-/**
- * @brief Class representing a system of equations
- * 
- * This class manages the global matrices and vectors including:
- * - Global H matrix (stiffness/conductivity matrix)
- * - Global P vector (load vector) - to be added
- * - Solution methods - to be added
- */
+// Global FEM equation system with solver methods
 class EquationSystem {
 private:
-    std::vector<std::vector<double>> H_global;  // Global H matrix [N x N]
-    std::vector<std::vector<double>> Hbc_global; // Global Hbc matrix [N x N]
-    std::vector<std::vector<double>> C_global;   // Global C matrix [N x N]
-    std::vector<double> P_global;                // Global P vector [N]
-    int systemSize;                              // Number of nodes (N)
+    std::vector<std::vector<double>> H_global;
+    std::vector<std::vector<double>> Hbc_global;
+    std::vector<std::vector<double>> C_global;
+    std::vector<double> P_global;
+    int systemSize;
+
+    void printMatrixHelper(const std::vector<std::vector<double>>& matrix, 
+                          const std::string& name) const;
+    std::vector<double> solveLinearSystem(std::vector<std::vector<double>>& augmentedMatrix) const;
 
 public:
     EquationSystem();
     explicit EquationSystem(int size);
     
-    // Matrix operations
     void setHMatrix(const std::vector<std::vector<double>>& H);
     void addToHMatrix(int i, int j, double value);
     void initializeHMatrix(int size);
@@ -34,53 +27,35 @@ public:
     void addToHbcMatrix(int i, int j, double value);
     void initializeHbcMatrix(int size);
     
-    // C matrix operations
     void setCMatrix(const std::vector<std::vector<double>>& C);
     void addToCMatrix(int i, int j, double value);
     void initializeCMatrix(int size);
     
-    // P vector operations
     void setPVector(const std::vector<double>& P);
     void addToPVector(int i, double value);
     void initializePVector(int size);
     
-    // Getters
-    const std::vector<std::vector<double>>& getHMatrix() const { return H_global; }
-    const std::vector<std::vector<double>>& getHbcMatrix() const { return Hbc_global; }
-    const std::vector<std::vector<double>>& getCMatrix() const { return C_global; }
-    const std::vector<double>& getPVector() const { return P_global; }
-    std::vector<std::vector<double>> getHTotalMatrix() const; // Returns H + Hbc
-    int getSystemSize() const { return systemSize; }
+    const std::vector<std::vector<double>>& getHMatrix() const noexcept { return H_global; }
+    const std::vector<std::vector<double>>& getHbcMatrix() const noexcept { return Hbc_global; }
+    const std::vector<std::vector<double>>& getCMatrix() const noexcept { return C_global; }
+    const std::vector<double>& getPVector() const noexcept { return P_global; }
+    std::vector<std::vector<double>> getHTotalMatrix() const;
+    int getSystemSize() const noexcept { return systemSize; }
     
-    // Display methods
     void printHMatrix() const;
     void printHbcMatrix() const;
     void printCMatrix() const;
-    void printHTotalMatrix() const; // Print H + Hbc
-    void printPVector() const; // Print P vector
+    void printHTotalMatrix() const;
+    void printPVector() const;
     void printSystemInfo() const;
     
-    // Solver methods
-    // Solve the equation system [H+Hbc]{t} = -{P}
-    // Returns temperature vector {t}
     std::vector<double> solve() const;
-    
-    // Solve transient heat transfer equation using time stepping
-    // ([C]/dt + [H+Hbc]){t^(i+1)} = ([C]/dt){t^(i)} + {P}
-    // Returns vector of temperature solutions for each time step
     std::vector<std::vector<double>> solveTransient(double simulationTime, 
                                                     double stepTime,
                                                     double initialTemp) const;
-    
     void printSolution(const std::vector<double>& temperatures) const;
     
-    // Matrix properties
     bool isSymmetric(double tolerance = 1e-10) const;
     double getTrace() const;
     double getSumOfElements() const;
-    
-    // Export methods
-    void exportResults(const std::string& filename, 
-                      const std::vector<double>& temperatures,
-                      const std::vector<Node>& nodes) const;
 };

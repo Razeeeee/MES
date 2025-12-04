@@ -16,7 +16,7 @@ bool Grid::loadFromFile(const std::string& filename) {
     std::ifstream file(filename);
     
     if (!file.is_open()) {
-        std::cerr << "Error: Could not open file " << filename << std::endl;
+        std::cerr << "Error: Cannot open " << filename << "\n";
         return false;
     }
     
@@ -59,7 +59,7 @@ bool Grid::loadFromFile(const std::string& filename) {
     }
     
     file.close();
-    std::cout << "Successfully loaded grid from: " << filename << std::endl;
+    std::cout << "Loaded: " << filename << "\n";
     return true;
 }
 
@@ -191,41 +191,41 @@ void Grid::printGlobalData() const {
 }
 
 void Grid::printNodes() const {
-    std::cout << "\n=== NODES ===" << std::endl;
+    std::cout << "\nNODES\n";
     for (const auto& node : nodes) {
         node.print();
     }
-    std::cout << "Total nodes: " << nodes.size() << std::endl;
+    std::cout << "Total: " << nodes.size() << "\n";
 }
 
 void Grid::printElements() const {
-    std::cout << "\n=== ELEMENTS ===" << std::endl;
+    std::cout << "\nELEMENTS\n";
     for (const auto& element : elements) {
         element.print();
     }
-    std::cout << "Total elements: " << elements.size() << std::endl;
+    std::cout << "Total: " << elements.size() << "\n";
 }
 
 void Grid::printBoundaryConditions() const {
-    std::cout << "\n=== BOUNDARY CONDITIONS ===" << std::endl;
-    std::cout << "Nodes with boundary conditions: ";
+    std::cout << "\nBOUNDARY CONDITIONS\n";
+    std::cout << "Nodes: ";
     for (auto it = boundaryConditions.begin(); it != boundaryConditions.end(); ++it) {
         std::cout << *it;
         if (std::next(it) != boundaryConditions.end()) {
             std::cout << ", ";
         }
     }
-    std::cout << std::endl;
-    std::cout << "Total boundary nodes: " << boundaryConditions.size() << std::endl;
+    std::cout << "\n";
+    std::cout << "Total: " << boundaryConditions.size() << " nodes\n";
 }
 
 void Grid::printSummary() const {
-    std::cout << "\n=== GRID SUMMARY ===" << std::endl;
-    std::cout << "File: " << filename << std::endl;
-    std::cout << "Nodes: " << nodes.size() << std::endl;
-    std::cout << "Elements: " << elements.size() << std::endl;
-    std::cout << "Boundary Conditions: " << boundaryConditions.size() << std::endl;
-    std::cout << "====================" << std::endl;
+    std::cout << "\nGRID SUMMARY\n";
+    std::cout << "File: " << filename << "\n";
+    std::cout << "Nodes: " << nodes.size() << "\n";
+    std::cout << "Elements: " << elements.size() << "\n";
+    std::cout << "Boundary Nodes: " << boundaryConditions.size() << "\n";
+    std::cout << std::string(40, '=') << "\n";
 }
 
 void Grid::printNodesIdAndCoordinates() const {
@@ -245,49 +245,47 @@ void Grid::printNodesIdAndCoordinates() const {
     std::cout << "Total nodes: " << nodes.size() << std::endl;
 }
 
-EquationSystem Grid::assembleGlobalEquationSystem(int numGaussPoints) const {
-    // Get the number of nodes (size of global matrix)
+EquationSystem Grid::assembleGlobalEquationSystem(int numGaussPointsH, int numGaussPointsC, int numGaussPointsBoundary) const {
+    (void)numGaussPointsC; // Unused - C matrix calculated per element
+    // Get the number of nodes (size of global system matrices)
     int N = nodes.size();
     
     // Initialize equation system with size N
     EquationSystem eqSystem(N);
     
-    // Get conductivity and alfa from global data
+    // Get material and boundary properties from global data
     double conductivity = globalData.getConductivity();
     double alfa = globalData.getAlfa();
     double tot = globalData.getTot();
     double density = globalData.getDensity();
     double specificHeat = globalData.getSpecificHeat();
     
-    // Iterate through all elements
+    // Assemble global matrices by iterating through all elements
+    // FEM Assembly: Σ (local contributions) → global matrices
     for (const auto& element : elements) {
-        // Get node IDs for this element (local numbering: 0-3)
+        // Get node IDs for this element (1-indexed in grid file)
         const auto& nodeIds = element.getNodeIds();
         
-        // Extract node coordinates for this element
+        // Extract node coordinates for this element [4 nodes]
         std::vector<double> nodeX(4), nodeY(4);
         for (size_t i = 0; i < nodeIds.size(); ++i) {
-            const Node& node = nodes[nodeIds[i] - 1]; // nodeIds are 1-indexed
+            const Node& node = nodes[nodeIds[i] - 1]; // Convert to 0-indexed
             nodeX[i] = node.getX();
             nodeY[i] = node.getY();
         }
         
-        // Calculate local H matrix [4x4] for this element
-        auto localH = element.calculateHMatrix(nodeX, nodeY, conductivity, numGaussPoints);
+        // OPTIMIZED: Calculate H and C matrices together (single Jacobian calculation per integration point)
+        auto [localH, localC] = element.calculateHAndCMatrices(
+            nodeX, nodeY, conductivity, density, specificHeat, numGaussPointsH);
         
-        // Determine which edges have boundary conditions
+        // Determine which edges have convection boundary conditions
         auto boundaryEdges = getElementBoundaryEdges(element);
         
-        // Calculate local Hbc matrix [4x4] for this element
-        auto localHbc = element.calculateHbcMatrix(nodeX, nodeY, alfa, boundaryEdges);
+        // OPTIMIZED: Calculate Hbc and P together for boundary conditions
+        auto [localHbc, localP] = element.calculateHbcAndPVector(
+            nodeX, nodeY, alfa, tot, boundaryEdges, numGaussPointsBoundary);
         
-        // Calculate local C matrix [4x4] for this element
-        auto localC = element.calculateCMatrix(nodeX, nodeY, density, specificHeat, numGaussPoints);
-        
-        // Calculate local P vector [4] for this element
-        auto localP = element.calculatePVector(nodeX, nodeY, alfa, tot, boundaryEdges);
-        
-        // Aggregate local H and Hbc matrices into global matrices
+        // Assemble local matrices into global system
         // Map from local element indices (0-3) to global node indices
         for (size_t i = 0; i < nodeIds.size(); ++i) {
             int globalI = nodeIds[i] - 1; // Convert to 0-indexed

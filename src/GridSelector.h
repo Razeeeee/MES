@@ -13,11 +13,9 @@ class GridSelector {
 private:
     std::string gridDirectory;
     std::vector<std::string> availableGridFiles;
-    std::vector<std::string> defaultGridFiles;
     
     // Helper methods
     void scanGridDirectory();
-    void initializeDefaultFiles();
     bool isValidGridFile(const std::filesystem::path& filePath) const;
     
 public:
@@ -29,8 +27,8 @@ public:
     bool hasGridFiles() const;
     
     // Getters
-    const std::vector<std::string>& getAvailableFiles() const { return availableGridFiles; }
-    const std::string& getGridDirectory() const { return gridDirectory; }
+    const std::vector<std::string>& getAvailableFiles() const noexcept { return availableGridFiles; }
+    const std::string& getGridDirectory() const noexcept { return gridDirectory; }
     
     // Utility methods
     void refreshFileList();

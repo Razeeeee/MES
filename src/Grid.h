@@ -50,9 +50,21 @@ public:
     Element* findElementById(int id);
     
     // Global matrix assembly
-    // Calculate global H matrix by aggregating local element H matrices
-    // Returns EquationSystem object containing the global H matrix [N x N]
-    EquationSystem assembleGlobalEquationSystem(int numGaussPoints = 2) const;
+    /**
+     * @brief Assemble global equation system from all elements
+     * 
+     * Aggregates local element matrices into global system matrices using
+     * the FEM assembly process: [K_global] = Σ [K_local]^e
+     * 
+     * @param numGaussPointsH Gauss points for H matrix (conductivity) integration
+     * @param numGaussPointsC Gauss points for C matrix (capacity) integration  
+     * @param numGaussPointsBoundary Gauss points for boundary condition integration
+     * @return EquationSystem object containing global H, Hbc, C matrices and P vector
+     */
+    EquationSystem assembleGlobalEquationSystem(
+        int numGaussPointsH = 2,
+        int numGaussPointsC = 2, 
+        int numGaussPointsBoundary = 2) const;
     
     // Helper method to determine which edges of an element have boundary conditions
     // Returns vector of 4 bools: [bottom, right, top, left]

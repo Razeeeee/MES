@@ -4,43 +4,34 @@
 
 GridSelector::GridSelector(const std::string& gridDir) 
     : gridDirectory(gridDir) {
-    initializeDefaultFiles();
     refreshFileList();
-}
-
-void GridSelector::initializeDefaultFiles() {
-    defaultGridFiles = {
-        "Test1_4_4.txt",
-        "Test2_4_4_MixGrid.txt", 
-        "Test3_31_31_kwadrat.txt"
-    };
 }
 
 void GridSelector::scanGridDirectory() {
     availableGridFiles.clear();
     
     try {
-        if (std::filesystem::exists(gridDirectory) && 
-            std::filesystem::is_directory(gridDirectory)) {
-            
-            for (const auto& entry : std::filesystem::directory_iterator(gridDirectory)) {
-                if (isValidGridFile(entry.path())) {
-                    availableGridFiles.push_back(entry.path().filename().string());
-                }
-            }
-            
-            // Sort files alphabetically
-            std::sort(availableGridFiles.begin(), availableGridFiles.end());
+        if (!std::filesystem::exists(gridDirectory)) {
+            std::cerr << "Warning: Directory '" << gridDirectory << "' not found\n";
+            return;
         }
+        
+        if (!std::filesystem::is_directory(gridDirectory)) {
+            std::cerr << "Warning: '" << gridDirectory << "' is not a directory\n";
+            return;
+        }
+        
+        for (const auto& entry : std::filesystem::directory_iterator(gridDirectory)) {
+            if (isValidGridFile(entry.path())) {
+                availableGridFiles.push_back(entry.path().filename().string());
+            }
+        }
+        
+        // Sort files alphabetically
+        std::sort(availableGridFiles.begin(), availableGridFiles.end());
+        
     } catch (const std::filesystem::filesystem_error& ex) {
-        std::cout << "Warning: Could not access grid directory: " << ex.what() << std::endl;
-        // Fall back to default files if directory is not accessible
-        availableGridFiles = defaultGridFiles;
-    }
-    
-    // If no files found in directory, use defaults
-    if (availableGridFiles.empty()) {
-        availableGridFiles = defaultGridFiles;
+        std::cerr << "Error: Cannot access directory: " << ex.what() << "\n";
     }
 }
 
@@ -50,13 +41,13 @@ bool GridSelector::isValidGridFile(const std::filesystem::path& filePath) const 
 }
 
 void GridSelector::displayMenu() const {
-    std::cout << "\nSelect grid file:" << std::endl;
+    std::cout << "\nSelect grid file:\n";
     
     for (size_t i = 0; i < availableGridFiles.size(); ++i) {
-        std::cout << (i + 1) << ". " << availableGridFiles[i] << std::endl;
+        std::cout << (i + 1) << ". " << availableGridFiles[i] << "\n";
     }
     
-    std::cout << "0. Exit" << std::endl;
+    std::cout << "0. Exit\n";
 }
 
 std::string GridSelector::selectGrid() {
@@ -64,10 +55,10 @@ std::string GridSelector::selectGrid() {
         displayMenu();
         
         int choice;
-        std::cout << "\nEnter your choice: ";
+        std::cout << "\nChoice: ";
         
         if (!(std::cin >> choice)) {
-            std::cout << "Invalid input. Please enter a number." << std::endl;
+            std::cout << "Invalid input. Enter a number.\n";
             std::cin.clear();
             std::cin.ignore(10000, '\n');
             continue;
@@ -79,7 +70,7 @@ std::string GridSelector::selectGrid() {
         
         std::string filename = getGridPath(choice);
         if (filename.empty()) {
-            std::cout << "Invalid choice. Please try again." << std::endl;
+            std::cout << "Invalid choice. Try again.\n";
             continue;
         }
         

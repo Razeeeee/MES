@@ -2,18 +2,26 @@
 #include "Grid.h"
 #include "EquationSystem.h"
 #include "GridSelector.h"
+#include "Config.h"
 #include <iostream>
 #include <iomanip>
-#include <fstream>
 #include <cmath>
-#include <cstdlib>
 #include <limits>
 
-// Helper function to clean up numerical errors (round very small values to zero)
+// ===========================================================================
+// HELPER FUNCTIONS
+// ===========================================================================
+
+/**
+ * @brief Clean up numerical errors (round very small values to zero)
+ */
 double cleanValue(double value, double tolerance = 1e-10) {
     return (std::abs(value) < tolerance) ? 0.0 : value;
 }
 
+/**
+ * @brief Print matrix with formatting
+ */
 void printMatrix(const std::vector<std::vector<double>>& matrix, const std::string& name) {
     std::cout << name << ":\n";
     for (const auto& row : matrix) {
@@ -26,6 +34,9 @@ void printMatrix(const std::vector<std::vector<double>>& matrix, const std::stri
     }
 }
 
+/**
+ * @brief Print vector with formatting
+ */
 void printVector(const std::vector<double>& vector, const std::string& name) {
     std::cout << name << ":\n  [";
     for (size_t i = 0; i < vector.size(); ++i) {
@@ -35,10 +46,22 @@ void printVector(const std::vector<double>& vector, const std::string& name) {
     std::cout << " ]\n";
 }
 
+// ===========================================================================
+// MAIN PROGRAM
+// ===========================================================================
+
 int main() {
     std::cout << std::fixed << std::setprecision(6);
     
-    // Select grid file
+    // -----------------------------------------------------------------------
+    // LOAD CONFIGURATION
+    // -----------------------------------------------------------------------
+    Config config("config/fem_config.txt");
+    config.print();
+    
+    // -----------------------------------------------------------------------
+    // SELECT AND LOAD GRID FILE
+    // -----------------------------------------------------------------------
     GridSelector selector("grids");
     std::string gridFile = selector.selectGrid();
     
@@ -47,343 +70,288 @@ int main() {
         return 0;
     }
     
-    // Load the grid
     Grid grid;
     if (!grid.loadFromFile(gridFile)) {
-        std::cerr << "Failed to load grid file: " << gridFile << "\n";
+        std::cerr << "Error: Failed to load " << gridFile << "\n";
         return 1;
     }
     
-    std::cout << "\n=== Successfully loaded: " << gridFile << " ===\n";
+    std::cout << "\nLoaded: " << gridFile << "\n";
     
-    // Get global data including conductivity
+    // -----------------------------------------------------------------------
+    // GET PROBLEM DATA
+    // -----------------------------------------------------------------------
     const auto& globalData = grid.getGlobalData();
-    double conductivity = globalData.getConductivity();
-    
     const auto& nodes = grid.getNodes();
     const auto& elements = grid.getElements();
     const auto& boundaryConditions = grid.getBoundaryConditions();
     
-    // Display boundary conditions
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "=== BOUNDARY CONDITIONS ===" << "\n";
-    std::cout << std::string(80, '=') << "\n\n";
+    double conductivity = globalData.getConductivity();
+    double alfa = globalData.getAlfa();
+    double tot = globalData.getTot();
+    double density = globalData.getDensity();
+    double specificHeat = globalData.getSpecificHeat();
     
-    std::cout << "Nodes with boundary conditions: ";
-    bool first = true;
-    for (int nodeId : boundaryConditions) {
-        if (!first) std::cout << ", ";
-        std::cout << nodeId;
-        first = false;
+    // -----------------------------------------------------------------------
+    // DISPLAY BOUNDARY CONDITIONS
+    // -----------------------------------------------------------------------
+    if (config.shouldPrintBoundaryConditions()) {
+        std::cout << "\n" << std::string(60, '=') << "\n";
+        std::cout << "BOUNDARY CONDITIONS\n";
+        std::cout << std::string(60, '=') << "\n\n";
+        
+        std::cout << "Convection BC nodes: ";
+        bool first = true;
+        for (int nodeId : boundaryConditions) {
+            if (!first) std::cout << ", ";
+            std::cout << nodeId;
+            first = false;
+        }
+        std::cout << "\nTotal: " << boundaryConditions.size() << " nodes\n";
+        std::cout << std::string(60, '=') << "\n\n";
     }
-    std::cout << "\n";
-    std::cout << "Total boundary nodes: " << boundaryConditions.size() << "\n";
     
-    std::cout << "\n" << std::string(80, '=') << "\n\n";
-    
-    std::cout << "Local H and Hbc matrices for each element:\n\n";
-    
-    // Calculate and display H and Hbc matrices for each element
-    for (const auto& element : elements) {
-        std::cout << "=== Element " << element.getId() << " ===\n";
+    // -----------------------------------------------------------------------
+    // CALCULATE AND DISPLAY LOCAL ELEMENT MATRICES
+    // -----------------------------------------------------------------------
+    if (config.shouldPrintLocalMatrices()) {
+        std::cout << "LOCAL ELEMENT MATRICES\n\n";
         
-        // Get node IDs for this element
-        const auto& nodeIds = element.getNodeIds();
-        std::cout << "Nodes: ";
-        for (size_t i = 0; i < nodeIds.size(); ++i) {
-            std::cout << nodeIds[i];
-            if (i < nodeIds.size() - 1) std::cout << ", ";
-        }
-        std::cout << "\n\n";
-        
-        // Extract node coordinates
-        std::vector<double> nodeX(4), nodeY(4);
-        for (size_t i = 0; i < nodeIds.size(); ++i) {
-            const Node& node = nodes[nodeIds[i] - 1];
-            nodeX[i] = node.getX();
-            nodeY[i] = node.getY();
-        }
-        
-        // Get boundary edges for this element
-        auto boundaryEdges = grid.getElementBoundaryEdges(element);
-        bool hasBoundary = false;
-        for (bool edge : boundaryEdges) {
-            if (edge) {
-                hasBoundary = true;
-                break;
+        for (const auto& element : elements) {
+            std::cout << "Element " << element.getId() << " (Nodes: ";
+            const auto& nodeIds = element.getNodeIds();
+            for (size_t i = 0; i < nodeIds.size(); ++i) {
+                std::cout << nodeIds[i];
+                if (i < nodeIds.size() - 1) std::cout << ", ";
             }
-        }
-        
-        std::cout << "Boundary edges: ";
-        if (hasBoundary) {
-            std::vector<std::string> edgeNames = {"Bottom", "Right", "Top", "Left"};
-            bool first = true;
-            for (size_t i = 0; i < boundaryEdges.size(); ++i) {
-                if (boundaryEdges[i]) {
-                    if (!first) std::cout << ", ";
-                    std::cout << edgeNames[i];
-                    first = false;
+            std::cout << "\n";
+            
+            // Extract node coordinates
+            std::vector<double> nodeX(4), nodeY(4);
+            for (size_t i = 0; i < nodeIds.size(); ++i) {
+                const Node& node = nodes[nodeIds[i] - 1];
+                nodeX[i] = node.getX();
+                nodeY[i] = node.getY();
+            }
+            
+            // Get boundary edges for this element
+            auto boundaryEdges = grid.getElementBoundaryEdges(element);
+            bool hasBoundary = false;
+            for (bool edge : boundaryEdges) {
+                if (edge) { hasBoundary = true; break; }
+            }
+            
+            if (hasBoundary) {
+                std::cout << "Boundary edges: ";
+                std::vector<std::string> edgeNames = {"Bottom", "Right", "Top", "Left"};
+                bool first = true;
+                for (size_t i = 0; i < boundaryEdges.size(); ++i) {
+                    if (boundaryEdges[i]) {
+                        if (!first) std::cout << ", ";
+                        std::cout << edgeNames[i];
+                        first = false;
+                    }
                 }
+                std::cout << "\n";
+            } else {
+                std::cout << "Boundary edges: None\n";
             }
-            std::cout << "\n\n";
-        } else {
-            std::cout << "None\n\n";
+            std::cout << "\n";
+            
+            try {
+                // Calculate H and C matrices together (optimized)
+                auto [H_matrix, C_matrix] = element.calculateHAndCMatrices(
+                    nodeX, nodeY, conductivity, density, specificHeat, 
+                    config.getGaussPointsH());
+                
+                printMatrix(H_matrix, "Local H Matrix [4x4]");
+                printMatrix(C_matrix, "Local C Matrix [4x4]");
+                
+                // Calculate Hbc and P together (optimized)
+                auto [Hbc_matrix, P_vector] = element.calculateHbcAndPVector(
+                    nodeX, nodeY, alfa, tot, boundaryEdges, 
+                    config.getGaussPointsBoundary());
+                
+                printMatrix(Hbc_matrix, "Local Hbc Matrix [4x4]");
+                printVector(P_vector, "Local P Vector [4]");
+                
+            } catch (const std::exception& e) {
+                std::cerr << "Error calculating matrices: " << e.what() << "\n";
+            }
+            
+            std::cout << "\n" << std::string(60, '-') << "\n\n";
         }
-        
-        try {
-            // Calculate and display H matrix
-            auto H_matrix = element.calculateHMatrix(nodeX, nodeY, conductivity, 2);
-            printMatrix(H_matrix, "Local H Matrix [4x4]");
-            
-            // Calculate and display Hbc matrix
-            double alfa = globalData.getAlfa();
-            auto Hbc_matrix = element.calculateHbcMatrix(nodeX, nodeY, alfa, boundaryEdges);
-            printMatrix(Hbc_matrix, "Local Hbc Matrix [4x4]");
-            
-            // Calculate and display C matrix
-            double density = globalData.getDensity();
-            double specificHeat = globalData.getSpecificHeat();
-            auto C_matrix = element.calculateCMatrix(nodeX, nodeY, density, specificHeat, 2);
-            printMatrix(C_matrix, "Local C Matrix [4x4]");
-            
-            // Calculate and display P vector
-            double tot = globalData.getTot();
-            auto P_vector = element.calculatePVector(nodeX, nodeY, alfa, tot, boundaryEdges);
-            printVector(P_vector, "Local P Vector [4]");
-            
-        } catch (const std::exception& e) {
-            std::cerr << "Error calculating matrices: " << e.what() << "\n";
-        }
-        
-        std::cout << "\n" << std::string(80, '-') << "\n\n";
     }
     
-    std::cout << "\n" << std::string(80, '=') << "\n\n";
+    // -----------------------------------------------------------------------
+    // ASSEMBLE GLOBAL EQUATION SYSTEM
+    // -----------------------------------------------------------------------
+    // FEM Assembly: Construct global matrices from local element contributions
+    // Global system: [H_global + Hbc_global]{T} + [C_global]{dT/dt} = {P_global}
+    EquationSystem eqSystem = grid.assembleGlobalEquationSystem(
+        config.getGaussPointsH(),
+        config.getGaussPointsC(),
+        config.getGaussPointsBoundary());
     
-    // Assemble global equation system
-    EquationSystem eqSystem = grid.assembleGlobalEquationSystem(2);
-    
-    // Print the global H matrix
-    eqSystem.printHMatrix();
-    
-    std::cout << "\n" << std::string(80, '=') << "\n\n";
-    
-    // Print the global Hbc matrix
-    eqSystem.printHbcMatrix();
-    
-    std::cout << "\n" << std::string(80, '=') << "\n\n";
-    
-    // Print the global C matrix
-    eqSystem.printCMatrix();
-    
-    std::cout << "\n" << std::string(80, '=') << "\n\n";
-    
-    // Print the global H+Hbc matrix
-    eqSystem.printHTotalMatrix();
-    
-    std::cout << "\n" << std::string(80, '=') << "\n\n";
-    
-    // Print the global P vector
-    eqSystem.printPVector();
-    
-    std::cout << "\n" << std::string(80, '=') << "\n\n";
-    
-    // Show element-to-global mapping for verification
-    std::cout << "=== ELEMENT TO GLOBAL NODE MAPPING ===\n\n";
-    std::cout << "Element | Local Node 1 | Local Node 2 | Local Node 3 | Local Node 4\n";
-    std::cout << std::string(70, '-') << "\n";
-    
-    for (const auto& element : elements) {
-        const auto& nodeIds = element.getNodeIds();
-        std::cout << std::setw(7) << element.getId() << " | ";
-        for (size_t i = 0; i < nodeIds.size(); ++i) {
-            std::cout << std::setw(12) << ("Global " + std::to_string(nodeIds[i]));
-            if (i < nodeIds.size() - 1) std::cout << " | ";
-        }
-        std::cout << "\n";
+    // -----------------------------------------------------------------------
+    // DISPLAY GLOBAL MATRICES
+    // -----------------------------------------------------------------------
+    if (config.shouldPrintGlobalMatrices()) {
+        std::cout << "\n" << std::string(60, '=') << "\n";
+        eqSystem.printHMatrix();
+        
+        std::cout << "\n" << std::string(60, '=') << "\n\n";
+        eqSystem.printHbcMatrix();
+        
+        std::cout << "\n" << std::string(60, '=') << "\n\n";
+        eqSystem.printCMatrix();
+        
+        std::cout << "\n" << std::string(60, '=') << "\n\n";
+        eqSystem.printHTotalMatrix();
+        
+        std::cout << "\n" << std::string(60, '=') << "\n\n";
+        eqSystem.printPVector();
+        
+        std::cout << "\n" << std::string(60, '=') << "\n\n";
     }
     
-    std::cout << "\n" << std::string(80, '=') << "\n\n";
+    // -----------------------------------------------------------------------
+    // DISPLAY ELEMENT-TO-GLOBAL MAPPING
+    // -----------------------------------------------------------------------
+    if (config.shouldPrintAssemblyMapping()) {
+        std::cout << "ELEMENT-TO-NODE MAPPING\n\n";
+        std::cout << "Element | Node 1 | Node 2 | Node 3 | Node 4\n";
+        std::cout << std::string(50, '-') << "\n";
+        
+        for (const auto& element : elements) {
+            const auto& nodeIds = element.getNodeIds();
+            std::cout << std::setw(7) << element.getId() << " | ";
+            for (size_t i = 0; i < nodeIds.size(); ++i) {
+                std::cout << std::setw(6) << nodeIds[i];
+                if (i < nodeIds.size() - 1) std::cout << " | ";
+            }
+            std::cout << "\n";
+        }
+        std::cout << std::string(50, '=') << "\n\n";
+    }
     
-    // Verify matrix properties using EquationSystem methods
-    eqSystem.printSystemInfo();
+    // -----------------------------------------------------------------------
+    // DISPLAY SYSTEM PROPERTIES
+    // -----------------------------------------------------------------------
+    if (config.shouldPrintSystemInfo()) {
+        eqSystem.printSystemInfo();
+        std::cout << "\n" << std::string(60, '=') << "\n\n";
+    }
     
-    std::cout << "\n" << std::string(80, '=') << "\n\n";
-    
-    // =========================================================
+    // -----------------------------------------------------------------------
     // TRANSIENT ANALYSIS (Time-dependent solution)
-    // =========================================================
+    // -----------------------------------------------------------------------
+    // Solve: [C]{dT/dt} + [H+Hbc]{T} = {P}
+    // Using backward Euler: [C/Δt + H+Hbc]{T^(n+1)} = [C/Δt]{T^n} + {P}
+    std::cout << "TRANSIENT ANALYSIS\n\n";
     
-    std::cout << "=== TRANSIENT HEAT TRANSFER ANALYSIS ===\n\n";
-    
-    // Get time parameters from global data
     double simulationTime = globalData.getSimulationTime();
     double stepTime = globalData.getSimulationStepTime();
     double initialTemp = globalData.getInitialTemp();
     
-    // Solve transient heat transfer equation
     auto temperatureHistory = eqSystem.solveTransient(simulationTime, stepTime, initialTemp);
     
-    // Display final temperature distribution
-    std::cout << "\n=== FINAL TEMPERATURE DISTRIBUTION (t = " << simulationTime << " s) ===\n\n";
-    eqSystem.printSolution(temperatureHistory.back());
+    if (config.shouldPrintFinalResults()) {
+        std::cout << "\nFINAL RESULTS (t = " << simulationTime << " s)\n\n";
+        eqSystem.printSolution(temperatureHistory.back());
+        std::cout << "\n" << std::string(60, '=') << "\n\n";
+    }
     
-    std::cout << "\n" << std::string(80, '=') << "\n\n";
-    
-    // Display temperature at intermediate time steps
-    std::cout << "=== TEMPERATURE HISTORY ===\n\n";
-    int numSteps = temperatureHistory.size();
-    std::cout << "Total time steps: " << numSteps << "\n\n";
-    
-    // Track min and max temperatures throughout the entire simulation
-    double minTemp = std::numeric_limits<double>::max();
-    double maxTemp = std::numeric_limits<double>::lowest();
-    int minTempNode = -1;
-    int maxTempNode = -1;
-    double minTempTime = 0.0;
-    double maxTempTime = 0.0;
-    int minTempElement = -1;
-    int maxTempElement = -1;
-    
-    // Analyze all time steps to find global min/max
-    for (int step = 0; step < numSteps; ++step) {
-        double time = step * stepTime;
-        const auto& temps = temperatureHistory[step];
+    // -----------------------------------------------------------------------
+    // TEMPERATURE HISTORY ANALYSIS
+    // -----------------------------------------------------------------------
+    if (config.shouldPrintTimeSteps()) {
+        std::cout << "TEMPERATURE HISTORY\n\n";
+        int numSteps = temperatureHistory.size();
+        std::cout << "Time steps: " << numSteps << "\n\n";
         
-        for (size_t i = 0; i < temps.size(); ++i) {
-            if (temps[i] < minTemp) {
-                minTemp = temps[i];
-                minTempNode = i + 1;  // Node IDs are 1-based
-                minTempTime = time;
-            }
-            if (temps[i] > maxTemp) {
-                maxTemp = temps[i];
-                maxTempNode = i + 1;  // Node IDs are 1-based
-                maxTempTime = time;
-            }
-        }
-    }
-    
-    // Find which element contains the min/max temperature nodes
-    for (const auto& element : elements) {
-        const auto& nodeIds = element.getNodeIds();
-        for (int nodeId : nodeIds) {
-            if (nodeId == minTempNode) {
-                minTempElement = element.getId();
-            }
-            if (nodeId == maxTempNode) {
-                maxTempElement = element.getId();
-            }
-        }
-    }
-    
-    // Display global min/max temperature information
-    std::cout << "=== GLOBAL TEMPERATURE EXTREMES (ENTIRE SIMULATION) ===\n\n";
-    std::cout << "Minimum Temperature:\n";
-    std::cout << "  Temperature: " << std::fixed << std::setprecision(4) << minTemp << " °C\n";
-    std::cout << "  Node:        " << minTempNode << "\n";
-    std::cout << "  Element:     " << minTempElement << "\n";
-    std::cout << "  Time:        " << std::fixed << std::setprecision(1) << minTempTime << " s\n\n";
-    
-    std::cout << "Maximum Temperature:\n";
-    std::cout << "  Temperature: " << std::fixed << std::setprecision(4) << maxTemp << " °C\n";
-    std::cout << "  Node:        " << maxTempNode << "\n";
-    std::cout << "  Element:     " << maxTempElement << "\n";
-    std::cout << "  Time:        " << std::fixed << std::setprecision(1) << maxTempTime << " s\n\n";
-    
-    std::cout << std::string(80, '-') << "\n\n";
-    
-    // Show temperatures at selected nodes for each time step
-    std::vector<int> displayNodes = {1, 4, 13, 16}; // Corner nodes
-    std::cout << "Time [s] | ";
-    for (int nodeId : displayNodes) {
-        std::cout << "Node " << std::setw(2) << nodeId << " [°C] | ";
-    }
-    std::cout << "\n" << std::string(80, '-') << "\n";
-    
-    for (int step = 0; step < numSteps; ++step) {
-        double time = step * stepTime;
-        std::cout << std::setw(8) << std::fixed << std::setprecision(1) << time << " | ";
-        for (int nodeId : displayNodes) {
-            if (nodeId - 1 < static_cast<int>(temperatureHistory[step].size())) {
-                std::cout << std::setw(13) << std::fixed << std::setprecision(4) 
-                         << temperatureHistory[step][nodeId - 1] << " | ";
-            }
-        }
-        std::cout << "\n";
-    }
-    
-    std::cout << "\n" << std::string(80, '=') << "\n\n";
-    
-    // =========================================================
-    // STEADY-STATE ANALYSIS (for comparison)
-    // =========================================================
-    
-    // Solve the equation system [H+Hbc]{t} = {P}
-    std::cout << "Solving the steady-state equation system [H+Hbc]{t} = {P}...\n\n";
-    auto temperatures = eqSystem.solve();
-    
-    // Display the solution
-    std::cout << "=== STEADY-STATE TEMPERATURE DISTRIBUTION ===\n\n";
-    eqSystem.printSolution(temperatures);
-    
-    std::cout << "\n" << std::string(80, '=') << "\n\n";
-    
-    // Export results to CSV for visualization
-    std::string outputFile = "results.csv";
-    eqSystem.exportResults(outputFile, temperatures, nodes);
-    
-    // Export transient results to CSV
-    std::string transientOutputFile = "results_transient.csv";
-    std::ofstream transientFile(transientOutputFile);
-    if (transientFile.is_open()) {
-        // Write header with time steps
-        transientFile << "node_id,x,y";
-        for (size_t step = 0; step < temperatureHistory.size(); ++step) {
-            transientFile << ",t_" << (step * stepTime);
-        }
-        transientFile << "\n";
+        // Track min/max temperatures throughout simulation
+        double minTemp = std::numeric_limits<double>::max();
+        double maxTemp = std::numeric_limits<double>::lowest();
+        int minTempNode = -1, maxTempNode = -1;
+        double minTempTime = 0.0, maxTempTime = 0.0;
+        int minTempElement = -1, maxTempElement = -1;
         
-        // Write data for each node
-        for (size_t i = 0; i < nodes.size(); ++i) {
-            transientFile << (i + 1) << ","
-                         << std::fixed << std::setprecision(10) << nodes[i].getX() << ","
-                         << std::fixed << std::setprecision(10) << nodes[i].getY();
+        for (int step = 0; step < numSteps; ++step) {
+            double time = step * stepTime;
+            const auto& temps = temperatureHistory[step];
             
-            for (const auto& temps : temperatureHistory) {
-                if (i < temps.size()) {
-                    transientFile << "," << std::fixed << std::setprecision(6) << temps[i];
+            for (size_t i = 0; i < temps.size(); ++i) {
+                if (temps[i] < minTemp) {
+                    minTemp = temps[i];
+                    minTempNode = i + 1;
+                    minTempTime = time;
+                }
+                if (temps[i] > maxTemp) {
+                    maxTemp = temps[i];
+                    maxTempNode = i + 1;
+                    maxTempTime = time;
                 }
             }
-            transientFile << "\n";
         }
-        transientFile.close();
-        std::cout << "Transient results exported to: " << transientOutputFile << "\n";
+        
+        // Find which element contains the min/max temperature nodes
+        for (const auto& element : elements) {
+            const auto& nodeIds = element.getNodeIds();
+            for (int nodeId : nodeIds) {
+                if (nodeId == minTempNode) minTempElement = element.getId();
+                if (nodeId == maxTempNode) maxTempElement = element.getId();
+            }
+        }
+        
+        std::cout << "TEMPERATURE EXTREMES\n\n";
+        std::cout << "Min: " << std::fixed << std::setprecision(4) << minTemp << " deg C "
+                  << "(Node " << minTempNode << ", Element " << minTempElement 
+                  << ", t=" << std::setprecision(1) << minTempTime << "s)\n";
+        
+        std::cout << "Max: " << std::fixed << std::setprecision(4) << maxTemp << " deg C "
+                  << "(Node " << maxTempNode << ", Element " << maxTempElement 
+                  << ", t=" << std::setprecision(1) << maxTempTime << "s)\n\n";
+        
+        std::cout << std::string(60, '-') << "\n\n";
+        
+        // Show temperatures at selected nodes for each time step
+        std::vector<int> displayNodes = {1, 4, 13, 16}; // Corner nodes (for 4x4 grid)
+        std::cout << "Time [s] | ";
+        for (int nodeId : displayNodes) {
+            std::cout << "Node " << std::setw(2) << nodeId << " [C] | ";
+        }
+        std::cout << "\n" << std::string(60, '-') << "\n";
+        
+        for (int step = 0; step < numSteps; ++step) {
+            double time = step * stepTime;
+            std::cout << std::setw(7) << std::fixed << std::setprecision(1) << time << " | ";
+            for (int nodeId : displayNodes) {
+                if (nodeId - 1 < static_cast<int>(temperatureHistory[step].size())) {
+                    std::cout << std::setw(12) << std::fixed << std::setprecision(4) 
+                             << temperatureHistory[step][nodeId - 1] << " | ";
+                }
+            }
+            std::cout << "\n";
+        }
+        std::cout << "\n" << std::string(60, '=') << "\n\n";
     }
     
-    std::cout << "\n" << std::string(80, '=') << "\n\n";
-    
-    // Launch Python visualization for steady-state
-    std::cout << "Launching steady-state temperature visualization...\n";
-    std::string pythonCmd = "python3 visualize_temperature.py " + outputFile + " " + gridFile;
-    int result = system(pythonCmd.c_str());
-    
-    if (result != 0) {
-        std::cerr << "\nNote: Steady-state visualization failed. Make sure matplotlib and numpy are installed.\n";
-        std::cerr << "You can manually run: python3 visualize_temperature.py " << outputFile << " " << gridFile << "\n";
+    // -----------------------------------------------------------------------
+    // STEADY-STATE ANALYSIS (for comparison)
+    // -----------------------------------------------------------------------
+    // Solve: [H+Hbc]{T} = {P}
+    if (config.shouldPrintSteadyState()) {
+        std::cout << "STEADY-STATE ANALYSIS\n\n";
+        std::cout << "Solving [H+Hbc]{T} = {P}\n\n";
+        
+        auto steadyTemperatures = eqSystem.solve();
+        eqSystem.printSolution(steadyTemperatures);
+        
+        std::cout << "\n" << std::string(60, '=') << "\n\n";
     }
     
-    // Launch Python visualization for transient analysis
-    std::cout << "\nLaunching transient temperature visualization with time slider...\n";
-    std::string pythonCmdTransient = "python3 visualize_temperature_transient.py " + transientOutputFile + " " + gridFile;
-    int resultTransient = system(pythonCmdTransient.c_str());
-    
-    if (resultTransient != 0) {
-        std::cerr << "\nNote: Transient visualization failed. Make sure matplotlib and numpy are installed.\n";
-        std::cerr << "You can manually run: python3 visualize_temperature_transient.py " << transientOutputFile << " " << gridFile << "\n";
-    }
-    
-    std::cout << "\n" << std::string(80, '=') << "\n\n";
+    std::cout << "Simulation complete.\n";
     
     return 0;
 }

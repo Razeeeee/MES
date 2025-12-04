@@ -6,11 +6,22 @@ GaussianIntegration::GaussianIntegration() {
 }
 
 void GaussianIntegration::initializeGaussianData() {
+    // 2-point Gaussian quadrature (exact for polynomials up to degree 3)
     gauss2Point.points = {-1.0/std::sqrt(3.0), 1.0/std::sqrt(3.0)};
     gauss2Point.weights = {1.0, 1.0};
     
+    // 3-point Gaussian quadrature (exact for polynomials up to degree 5)
     gauss3Point.points = {-std::sqrt(3.0/5.0), 0.0, std::sqrt(3.0/5.0)};
     gauss3Point.weights = {5.0/9.0, 8.0/9.0, 5.0/9.0};
+    
+    // 4-point Gaussian quadrature (exact for polynomials up to degree 7)
+    double p1 = std::sqrt(3.0/7.0 - 2.0/7.0 * std::sqrt(6.0/5.0));
+    double p2 = std::sqrt(3.0/7.0 + 2.0/7.0 * std::sqrt(6.0/5.0));
+    double w1 = (18.0 + std::sqrt(30.0)) / 36.0;
+    double w2 = (18.0 - std::sqrt(30.0)) / 36.0;
+    
+    gauss4Point.points = {-p2, -p1, p1, p2};
+    gauss4Point.weights = {w2, w1, w1, w2};
 }
 
 const GaussianIntegration::GaussianPoints& GaussianIntegration::getGaussianData(int numPoints) const {
@@ -18,8 +29,10 @@ const GaussianIntegration::GaussianPoints& GaussianIntegration::getGaussianData(
         return gauss2Point;
     } else if (numPoints == 3) {
         return gauss3Point;
+    } else if (numPoints == 4) {
+        return gauss4Point;
     } else {
-        throw std::invalid_argument("Only 2-point and 3-point Gaussian quadrature are supported");
+        throw std::invalid_argument("Only 2-point, 3-point, and 4-point Gaussian quadrature are supported");
     }
 }
 

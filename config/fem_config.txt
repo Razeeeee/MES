@@ -1,0 +1,28 @@
+# GAUSSIAN INTEGRATION POINTS
+# Supported values: 2, 3, or 4
+# For H matrix (conductivity/stiffness matrix) - used in volume integration
+gauss_points_h = 3
+# For C matrix (heat capacity matrix) - used in volume integration
+gauss_points_c = 3
+# For boundary conditions (Hbc matrix and P vector) - used in edge integration
+gauss_points_boundary = 3
+
+# CONSOLE OUTPUT CONTROL
+# Control what gets printed to the console
+# Valid values: true/false, yes/no, 1/0, on/off
+# Print local H, Hbc, C, P matrices for each element
+print_local_matrices = false
+# Print global H, Hbc, C, P matrices
+print_global_matrices = false
+# Print element-to-global node mapping table
+print_assembly_mapping = false
+# Print system properties (symmetry check, etc)
+print_system_info = false
+# Print boundary condition details
+print_boundary_conditions = false
+# Print temperature at each time step during transient analysis
+print_time_steps = true
+# Print final temperature distribution
+print_final_results = false
+# Print steady-state solution
+print_steady_state = true

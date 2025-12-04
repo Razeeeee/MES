@@ -1,150 +1,91 @@
 #pragma once
 #include <vector>
 #include <iostream>
+#include <utility>
 
-/**
- * @brief Represents a finite element in the mesh
- * 
- * Contains element ID and node IDs that form the element
- * Supports DC2D4 (4-node quadrilateral) elements
- */
+// 4-node quadrilateral element for 2D heat transfer (supports 2/3/4-point Gaussian quadrature)
 class Element {
 private:
     int id;
     std::vector<int> nodeIds;
     std::string type;
+    
+    static void getGaussianPoints(int numPoints, std::vector<double>& points, std::vector<double>& weights);
 
 public:
     Element();
     Element(int id, const std::vector<int>& nodeIds, const std::string& type = "DC2D4");
     
     // Getters
-    int getId() const { return id; }
-    const std::vector<int>& getNodeIds() const { return nodeIds; }
-    const std::string& getType() const { return type; }
+    int getId() const noexcept { return id; }
+    const std::vector<int>& getNodeIds() const noexcept { return nodeIds; }
+    const std::string& getType() const noexcept { return type; }
     
     // Setters
-    void setId(int id) { this->id = id; }
+    void setId(int id) noexcept { this->id = id; }
     void setNodeIds(const std::vector<int>& nodeIds) { this->nodeIds = nodeIds; }
     void setType(const std::string& type) { this->type = type; }
     
-    // Display element information
     void print() const;
     
-    // Shape function derivatives for Jacobian calculation
-    // For 4-node quadrilateral element
-    static double dN1_dXi(double xi, double eta);
-    static double dN2_dXi(double xi, double eta);
-    static double dN3_dXi(double xi, double eta);
-    static double dN4_dXi(double xi, double eta);
-    
-    static double dN1_dEta(double xi, double eta);
-    static double dN2_dEta(double xi, double eta);
-    static double dN3_dEta(double xi, double eta);
-    static double dN4_dEta(double xi, double /*eta*/);
-    
-    // Shape functions for boundary condition matrix
+    // Shape functions N(ξ,η) in natural coordinates
     static double N1(double xi, double eta);
     static double N2(double xi, double eta);
     static double N3(double xi, double eta);
     static double N4(double xi, double eta);
     
-    // Calculate matrix of shape function derivatives at integration points
-    // Returns matrix where rows are integration points and columns are shape functions
-    // For 2x2 integration: 4x4 matrix, for 3x3 integration: 9x4 matrix
-    static std::vector<std::vector<double>> calculateShapeFunctionDerivativeMatrix_Xi(int numPoints);
-    static std::vector<std::vector<double>> calculateShapeFunctionDerivativeMatrix_Eta(int numPoints);
+    // Shape function derivatives ∂N/∂ξ
+    static double dN1_dXi(double xi, double eta);
+    static double dN2_dXi(double xi, double eta);
+    static double dN3_dXi(double xi, double eta);
+    static double dN4_dXi(double xi, double eta);
     
-    // Jacobian calculation methods
-    // Calculate Jacobian matrix (2x2) at a specific integration point
-    std::vector<std::vector<double>> calculateJacobian(const std::vector<double>& nodeX, 
-                                                       const std::vector<double>& nodeY, 
-                                                       double xi, double eta) const;
+    // Shape function derivatives ∂N/∂η
+    static double dN1_dEta(double xi, double eta);
+    static double dN2_dEta(double xi, double eta);
+    static double dN3_dEta(double xi, double eta);
+    static double dN4_dEta(double xi, double eta);
     
-    // Calculate inverse Jacobian matrix (2x2)
-    std::vector<std::vector<double>> calculateInverseJacobian(const std::vector<std::vector<double>>& jacobian) const;
+    // Jacobian transformation
+    std::vector<std::vector<double>> calculateJacobian(
+        const std::vector<double>& nodeX, 
+        const std::vector<double>& nodeY, 
+        double xi, double eta) const;
     
-    // Calculate determinant of Jacobian matrix
     double calculateDetJ(const std::vector<std::vector<double>>& jacobian) const;
     
-    // Calculate Jacobians for all integration points for this element
-    // Returns vector of {jacobian, inverse_jacobian, detJ} for each integration point
-    struct JacobianData {
-        std::vector<std::vector<double>> jacobian;
-        std::vector<std::vector<double>> inverseJacobian;
-        double detJ;
-    };
+    std::vector<std::vector<double>> calculateInverseJacobian(
+        const std::vector<std::vector<double>>& jacobian) const;
     
-    std::vector<JacobianData> calculateElementJacobians(const std::vector<double>& nodeX, 
-                                                        const std::vector<double>& nodeY, 
-                                                        int numGaussPoints) const;
+    // Physical coordinate derivatives ∂N/∂x and ∂N/∂y
+    static std::vector<double> calculateDN_Dx(
+        double xi, double eta, 
+        const std::vector<std::vector<double>>& inverseJacobian);
     
-    // Calculate shape function derivatives with respect to physical coordinates (x, y)
-    // Using chain rule: [dN/dx] = [J^-1] * [dN/dxi ]
-    //                  [dN/dy]           [dN/deta]
+    static std::vector<double> calculateDN_Dy(
+        double xi, double eta, 
+        const std::vector<std::vector<double>>& inverseJacobian);
     
-    // Calculate dN/dx for all shape functions at a specific integration point
-    static std::vector<double> calculateDN_Dx(double xi, double eta, 
-                                              const std::vector<std::vector<double>>& inverseJacobian);
-    
-    // Calculate dN/dy for all shape functions at a specific integration point  
-    static std::vector<double> calculateDN_Dy(double xi, double eta, 
-                                              const std::vector<std::vector<double>>& inverseJacobian);
-    
-    // Calculate matrices of shape function derivatives with respect to x and y
-    // at all integration points for this element
-    // Returns pair of matrices: {dN_dx_matrix, dN_dy_matrix}
-    // Each matrix has rows = integration points, columns = shape functions (4 for DC2D4)
+    // Calculate H (conductivity) and C (capacity) matrices simultaneously
     std::pair<std::vector<std::vector<double>>, std::vector<std::vector<double>>> 
-    calculatePhysicalDerivativeMatrices(const std::vector<double>& nodeX, 
-                                       const std::vector<double>& nodeY, 
-                                       int numGaussPoints) const;
+    calculateHAndCMatrices(
+        const std::vector<double>& nodeX,
+        const std::vector<double>& nodeY,
+        double conductivity,
+        double density,
+        double specificHeat,
+        int numGaussPoints) const;
     
-    // Calculate H matrix for heat conduction using physical derivatives
-    // H = conductivity * (dN/dx * transpose(dN/dx) + dN/dy * transpose(dN/dy)) * detJ
-    // Sums contributions from all integration points
-    std::vector<std::vector<double>> calculateHMatrix(const std::vector<double>& nodeX, 
-                                                     const std::vector<double>& nodeY, 
-                                                     double conductivity,
-                                                     int numGaussPoints) const;
+    // Calculate Hbc (boundary convection) and P (heat flux) simultaneously
+    std::pair<std::vector<std::vector<double>>, std::vector<double>>
+    calculateHbcAndPVector(
+        const std::vector<double>& nodeX,
+        const std::vector<double>& nodeY,
+        double alfa,
+        double tot,
+        const std::vector<bool>& boundaryEdges,
+        int numGaussPoints) const;
     
-    // Calculate Hbc matrix for boundary conditions
-    // Hbc = alfa * N * transpose(N) * detJ
-    // Only calculates for edges with boundary conditions
-    // Parameters: nodeX, nodeY - coordinates of element nodes
-    //            alfa - heat transfer coefficient
-    //            boundaryEdges - which edges have BC (0=bottom, 1=right, 2=top, 3=left)
-    std::vector<std::vector<double>> calculateHbcMatrix(const std::vector<double>& nodeX,
-                                                        const std::vector<double>& nodeY,
-                                                        double alfa,
-                                                        const std::vector<bool>& boundaryEdges) const;
-    
-    // Calculate P vector for boundary conditions
-    // P = alfa * tot * N * detJ
-    // Only calculates for edges with boundary conditions
-    // Parameters: nodeX, nodeY - coordinates of element nodes
-    //            alfa - heat transfer coefficient
-    //            tot - ambient temperature
-    //            boundaryEdges - which edges have BC (0=bottom, 1=right, 2=top, 3=left)
-    std::vector<double> calculatePVector(const std::vector<double>& nodeX,
-                                        const std::vector<double>& nodeY,
-                                        double alfa,
-                                        double tot,
-                                        const std::vector<bool>& boundaryEdges) const;
-    
-    // Calculate C matrix for heat capacity
-    // C = density * specificHeat * N * transpose(N) * detJ
-    // Sums contributions from all integration points
-    // Parameters: nodeX, nodeY - coordinates of element nodes
-    //            density - material density
-    //            specificHeat - specific heat capacity
-    //            numGaussPoints - number of Gauss integration points (2 or 3)
-    std::vector<std::vector<double>> calculateCMatrix(const std::vector<double>& nodeX,
-                                                      const std::vector<double>& nodeY,
-                                                      double density,
-                                                      double specificHeat,
-                                                      int numGaussPoints) const;
-    
-    // Friend operator for output stream
+    // Output stream operator
     friend std::ostream& operator<<(std::ostream& os, const Element& element);
 };
