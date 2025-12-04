@@ -315,24 +315,35 @@ int main() {
         
         std::cout << std::string(60, '-') << "\n\n";
         
-        // Show temperatures at selected nodes for each time step
-        std::vector<int> displayNodes = {1, 4, 13, 16}; // Corner nodes (for 4x4 grid)
-        std::cout << "Time [s] | ";
-        for (int nodeId : displayNodes) {
-            std::cout << "Node " << std::setw(2) << nodeId << " [C] | ";
-        }
-        std::cout << "\n" << std::string(60, '-') << "\n";
+        // Show min/max temperatures for each time step
+        std::cout << "Time [s] | Min Temp [C] (Node) | Max Temp [C] (Node) |\n";
+        std::cout << std::string(60, '-') << "\n";
         
         for (int step = 0; step < numSteps; ++step) {
             double time = step * stepTime;
-            std::cout << std::setw(7) << std::fixed << std::setprecision(1) << time << " | ";
-            for (int nodeId : displayNodes) {
-                if (nodeId - 1 < static_cast<int>(temperatureHistory[step].size())) {
-                    std::cout << std::setw(12) << std::fixed << std::setprecision(4) 
-                             << temperatureHistory[step][nodeId - 1] << " | ";
+            const auto& temps = temperatureHistory[step];
+            
+            // Find min and max for this time step
+            double stepMin = std::numeric_limits<double>::max();
+            double stepMax = std::numeric_limits<double>::lowest();
+            int stepMinNode = -1, stepMaxNode = -1;
+            
+            for (size_t i = 0; i < temps.size(); ++i) {
+                if (temps[i] < stepMin) {
+                    stepMin = temps[i];
+                    stepMinNode = i + 1;
+                }
+                if (temps[i] > stepMax) {
+                    stepMax = temps[i];
+                    stepMaxNode = i + 1;
                 }
             }
-            std::cout << "\n";
+            
+            std::cout << std::setw(7) << std::fixed << std::setprecision(1) << time << " | "
+                     << std::setw(8) << std::setprecision(4) << stepMin << " (Node " 
+                     << std::setw(2) << stepMinNode << ") | "
+                     << std::setw(8) << std::setprecision(4) << stepMax << " (Node " 
+                     << std::setw(2) << stepMaxNode << ") |\n";
         }
         std::cout << "\n" << std::string(60, '=') << "\n\n";
     }

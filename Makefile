@@ -23,13 +23,6 @@ clean:
 	@chmod +x scripts/clean.sh
 	@./scripts/clean.sh
 
-# Build PDF documentation from LaTeX
-docs:
-	@echo "Compiling LaTeX documentation..."
-	@cd notes && pdflatex -interaction=nonstopmode fem_implementation_summary.tex > /dev/null
-	@cd notes && pdflatex -interaction=nonstopmode fem_implementation_summary.tex > /dev/null
-	@echo "Documentation generated: notes/fem_implementation_summary.pdf"
-
 # Initialize project permissions (run this on a new machine)
 init:
 	@echo "Setting script permissions..."
