@@ -5,10 +5,10 @@
 
 // Constructors
 
-Element::Element() : id(0), type("DC2D4") {}
+Element::Element() : id(0), type("DC2D4"), materialId(0) {}
 
-Element::Element(int id, const std::vector<int>& nodeIds, const std::string& type) 
-    : id(id), nodeIds(nodeIds), type(type) {}
+Element::Element(int id, const std::vector<int>& nodeIds, const std::string& type, int materialId) 
+    : id(id), nodeIds(nodeIds), type(type), materialId(materialId) {}
 
 void Element::print() const {
     std::cout << "Element " << std::setw(3) << id << "]: ";

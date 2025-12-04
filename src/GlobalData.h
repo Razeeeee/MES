@@ -1,24 +1,45 @@
 #pragma once
 #include <string>
+#include <map>
+
+/**
+ * @brief Material properties for heat transfer
+ */
+struct Material {
+    int id;
+    std::string name;
+    double conductivity;
+    double density;
+    double specificHeat;
+    
+    Material() : id(0), name(""), conductivity(0.0), density(0.0), specificHeat(0.0) {}
+    Material(int id, const std::string& name, double k, double rho, double c)
+        : id(id), name(name), conductivity(k), density(rho), specificHeat(c) {}
+};
 
 /**
  * @brief Stores global simulation parameters
  * 
  * Contains all the global data parameters from the grid file
  * such as simulation time, material properties, etc.
+ * Supports both single-material (legacy) and multi-material definitions
  */
 class GlobalData {
 private:
     double simulationTime;
     double simulationStepTime;
-    double conductivity;
+    double conductivity;        // Legacy: default material conductivity
     double alfa;
     double tot;
     double initialTemp;
-    double density;
-    double specificHeat;
+    double density;              // Legacy: default material density
+    double specificHeat;         // Legacy: default material specific heat
     int nodesNumber;
     int elementsNumber;
+    
+    // Multi-material support
+    std::map<int, Material> materials;  // Material ID -> Material
+    bool hasMultipleMaterials;
 
 public:
     GlobalData();
@@ -46,6 +67,18 @@ public:
     void setSpecificHeat(double value) noexcept { specificHeat = value; }
     void setNodesNumber(int value) noexcept { nodesNumber = value; }
     void setElementsNumber(int value) noexcept { elementsNumber = value; }
+    
+    // Multi-material support
+    void addMaterial(const Material& material);
+    bool hasMaterial(int materialId) const;
+    const Material& getMaterial(int materialId) const;
+    const std::map<int, Material>& getMaterials() const noexcept { return materials; }
+    bool hasMultiMaterialSupport() const noexcept { return hasMultipleMaterials; }
+    
+    // Get material properties (with fallback to legacy for backward compatibility)
+    double getMaterialConductivity(int materialId = 0) const;
+    double getMaterialDensity(int materialId = 0) const;
+    double getMaterialSpecificHeat(int materialId = 0) const;
     
     // Display global data information
     void print() const;

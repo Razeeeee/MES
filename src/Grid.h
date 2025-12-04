@@ -18,6 +18,7 @@ private:
     std::vector<Node> nodes;
     std::vector<Element> elements;
     std::set<int> boundaryConditions;
+    std::map<int, double> boundaryTemperatures;  // node ID -> temperature (if specified)
     GlobalData globalData;
     std::string filename;
 
@@ -25,6 +26,7 @@ private:
     void parseGlobalData(const std::string& line);
     void parseNode(const std::string& line);
     void parseElement(const std::string& line);
+    void parseMaterial(const std::string& line);
     void parseBoundaryConditions(const std::string& line);
     
     // String utility methods
@@ -42,6 +44,7 @@ public:
     const std::vector<Node>& getNodes() const { return nodes; }
     const std::vector<Element>& getElements() const { return elements; }
     const std::set<int>& getBoundaryConditions() const { return boundaryConditions; }
+    const std::map<int, double>& getBoundaryTemperatures() const { return boundaryTemperatures; }
     const GlobalData& getGlobalData() const { return globalData; }
     const std::string& getFilename() const { return filename; }
     

@@ -40,6 +40,9 @@ bool Grid::loadFromFile(const std::string& filename) {
         } else if (line.find("*Element") == 0) {
             currentSection = "ELEMENT";
             continue;
+        } else if (line.find("*Material") == 0) {
+            currentSection = "MATERIAL";
+            continue;
         } else if (line.find("*BC") == 0) {
             currentSection = "BC";
             continue;
@@ -50,6 +53,8 @@ bool Grid::loadFromFile(const std::string& filename) {
             parseNode(line);
         } else if (currentSection == "ELEMENT") {
             parseElement(line);
+        } else if (currentSection == "MATERIAL") {
+            parseMaterial(line);
         } else if (currentSection == "BC") {
             parseBoundaryConditions(line);
         } else {
@@ -123,14 +128,41 @@ void Grid::parseElement(const std::string& line) {
     std::istringstream iss(cleanLine);
     int id, nodeId;
     std::vector<int> nodeIds;
+    int materialId = 0;  // Default material ID (uses global properties)
     
     if (iss >> id) {
         while (iss >> nodeId) {
             nodeIds.push_back(nodeId);
         }
-        if (!nodeIds.empty()) {
-            elements.emplace_back(id, nodeIds);
+        
+        // Check if there's a material ID after the node IDs
+        // Format can be: id, n1, n2, n3, n4, materialId
+        // If we have 5 values, the last one is the material ID
+        if (nodeIds.size() == 5) {
+            materialId = nodeIds.back();
+            nodeIds.pop_back();
         }
+        
+        if (!nodeIds.empty()) {
+            elements.emplace_back(id, nodeIds, "DC2D4", materialId);
+        }
+    }
+}
+
+void Grid::parseMaterial(const std::string& line) {
+    // Format: MaterialID, Name, Conductivity, Density, SpecificHeat
+    // Example: 1, Glass, 1.0, 2500, 750
+    std::string cleanLine = line;
+    std::replace(cleanLine.begin(), cleanLine.end(), ',', ' ');
+    
+    std::istringstream iss(cleanLine);
+    int id;
+    std::string name;
+    double conductivity, density, specificHeat;
+    
+    if (iss >> id >> name >> conductivity >> density >> specificHeat) {
+        Material mat(id, name, conductivity, density, specificHeat);
+        globalData.addMaterial(mat);
     }
 }
 
@@ -140,10 +172,22 @@ void Grid::parseBoundaryConditions(const std::string& line) {
     std::replace(cleanLine.begin(), cleanLine.end(), ',', ' ');
     
     std::istringstream iss(cleanLine);
-    int nodeId;
+    std::string token;
     
-    while (iss >> nodeId) {
-        boundaryConditions.insert(nodeId);
+    while (iss >> token) {
+        // Check if this token contains a colon (node:temperature format)
+        size_t colonPos = token.find(':');
+        if (colonPos != std::string::npos) {
+            // New format: nodeId:temperature
+            int nodeId = std::stoi(token.substr(0, colonPos));
+            double temp = std::stod(token.substr(colonPos + 1));
+            boundaryConditions.insert(nodeId);
+            boundaryTemperatures[nodeId] = temp;
+        } else {
+            // Old format: just nodeId (uses global Tot)
+            int nodeId = std::stoi(token);
+            boundaryConditions.insert(nodeId);
+        }
     }
 }
 
@@ -253,12 +297,9 @@ EquationSystem Grid::assembleGlobalEquationSystem(int numGaussPointsH, int numGa
     // Initialize equation system with size N
     EquationSystem eqSystem(N);
     
-    // Get material and boundary properties from global data
-    double conductivity = globalData.getConductivity();
+    // Get boundary properties from global data (same for all elements)
     double alfa = globalData.getAlfa();
     double tot = globalData.getTot();
-    double density = globalData.getDensity();
-    double specificHeat = globalData.getSpecificHeat();
     
     // Assemble global matrices by iterating through all elements
     // FEM Assembly: Σ (local contributions) → global matrices
@@ -273,6 +314,12 @@ EquationSystem Grid::assembleGlobalEquationSystem(int numGaussPointsH, int numGa
             nodeX[i] = node.getX();
             nodeY[i] = node.getY();
         }
+        
+        // Get material properties for this element (supports multi-material)
+        int matId = element.getMaterialId();
+        double conductivity = globalData.getMaterialConductivity(matId);
+        double density = globalData.getMaterialDensity(matId);
+        double specificHeat = globalData.getMaterialSpecificHeat(matId);
         
         // OPTIMIZED: Calculate H and C matrices together (single Jacobian calculation per integration point)
         auto [localH, localC] = element.calculateHAndCMatrices(
@@ -301,6 +348,31 @@ EquationSystem Grid::assembleGlobalEquationSystem(int numGaussPointsH, int numGa
                 eqSystem.addToHbcMatrix(globalI, globalJ, localHbc[i][j]);
                 eqSystem.addToCMatrix(globalI, globalJ, localC[i][j]);
             }
+        }
+    }
+    
+    // Post-process P vector for per-node boundary temperatures (if specified)
+    // P = Hbc * T_boundary, where T_boundary varies per node
+    if (!boundaryTemperatures.empty()) {
+        // Recalculate P vector using per-node temperatures
+        std::vector<double> newP(N, 0.0);
+        const auto& HbcMatrix = eqSystem.getHbcMatrix();
+        
+        for (int i = 0; i < N; ++i) {
+            for (int j = 0; j < N; ++j) {
+                if (HbcMatrix[i][j] != 0.0) {
+                    int nodeId = j + 1; // Convert to 1-indexed
+                    // Use per-node temperature if specified, otherwise use global Tot
+                    double nodeTemp = boundaryTemperatures.count(nodeId) ? 
+                                     boundaryTemperatures.at(nodeId) : tot;
+                    newP[i] += HbcMatrix[i][j] * nodeTemp;
+                }
+            }
+        }
+        
+        // Replace P vector with recalculated values
+        for (int i = 0; i < N; ++i) {
+            eqSystem.setPVector(i, newP[i]);
         }
     }
     

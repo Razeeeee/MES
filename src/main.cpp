@@ -256,6 +256,9 @@ int main() {
     
     auto temperatureHistory = eqSystem.solveTransient(simulationTime, stepTime, initialTemp);
     
+    // Export transient results to CSV
+    eqSystem.exportTransientResults("data/transient_results.csv", temperatureHistory, nodes, stepTime);
+    
     if (config.shouldPrintFinalResults()) {
         std::cout << "\nFINAL RESULTS (t = " << simulationTime << " s)\n\n";
         eqSystem.printSolution(temperatureHistory.back());

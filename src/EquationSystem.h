@@ -32,6 +32,7 @@ public:
     void initializeCMatrix(int size);
     
     void setPVector(const std::vector<double>& P);
+    void setPVector(int i, double value);  // Set individual element
     void addToPVector(int i, double value);
     void initializePVector(int size);
     
@@ -54,6 +55,12 @@ public:
                                                     double stepTime,
                                                     double initialTemp) const;
     void printSolution(const std::vector<double>& temperatures) const;
+    
+    // Export results to CSV
+    void exportTransientResults(const std::string& filename,
+                               const std::vector<std::vector<double>>& temperatureHistory,
+                               const std::vector<class Node>& nodes,
+                               double stepTime) const;
     
     bool isSymmetric(double tolerance = 1e-10) const;
     double getTrace() const;

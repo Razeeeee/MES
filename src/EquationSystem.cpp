@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <cmath>
 #include <fstream>
+#include <fstream>
 
 // Helper function to clean up numerical errors
 static double cleanValue(double value, double tolerance = 1e-10) {
@@ -86,6 +87,12 @@ void EquationSystem::setPVector(const std::vector<double>& P) {
     P_global = P;
     if (!P_global.empty()) {
         systemSize = P_global.size();
+    }
+}
+
+void EquationSystem::setPVector(int i, double value) {
+    if (i >= 0 && i < systemSize) {
+        P_global[i] = value;
     }
 }
 
@@ -421,4 +428,42 @@ std::vector<std::vector<double>> EquationSystem::solveTransient(double simulatio
     std::cout << std::string(60, '=') << "\n\n";
     
     return temperatureHistory;
+}
+
+void EquationSystem::exportTransientResults(
+    const std::string& filename,
+    const std::vector<std::vector<double>>& temperatureHistory,
+    const std::vector<Node>& nodes,
+    double stepTime) const {
+    
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Error: Cannot create file " << filename << "\n";
+        return;
+    }
+    
+    // Write CSV header: node_id, x, y, t_0, t_50, t_100, ...
+    file << "node_id,x,y";
+    for (size_t step = 0; step < temperatureHistory.size(); ++step) {
+        file << ",t_" << std::fixed << std::setprecision(1) << (step * stepTime);
+    }
+    file << "\n";
+    
+    // Write data for each node
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        file << (i + 1) << ","
+             << std::fixed << std::setprecision(6) << nodes[i].getX() << ","
+             << std::fixed << std::setprecision(6) << nodes[i].getY();
+        
+        // Write temperature at each time step
+        for (const auto& temps : temperatureHistory) {
+            if (i < temps.size()) {
+                file << "," << std::fixed << std::setprecision(4) << temps[i];
+            }
+        }
+        file << "\n";
+    }
+    
+    file.close();
+    std::cout << "Exported transient results to: " << filename << "\n";
 }

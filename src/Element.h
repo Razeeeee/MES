@@ -9,22 +9,25 @@ private:
     int id;
     std::vector<int> nodeIds;
     std::string type;
+    int materialId;  // Material ID for multi-material support (0 = use global default)
     
     static void getGaussianPoints(int numPoints, std::vector<double>& points, std::vector<double>& weights);
 
 public:
     Element();
-    Element(int id, const std::vector<int>& nodeIds, const std::string& type = "DC2D4");
+    Element(int id, const std::vector<int>& nodeIds, const std::string& type = "DC2D4", int materialId = 0);
     
     // Getters
     int getId() const noexcept { return id; }
     const std::vector<int>& getNodeIds() const noexcept { return nodeIds; }
     const std::string& getType() const noexcept { return type; }
+    int getMaterialId() const noexcept { return materialId; }
     
     // Setters
     void setId(int id) noexcept { this->id = id; }
     void setNodeIds(const std::vector<int>& nodeIds) { this->nodeIds = nodeIds; }
     void setType(const std::string& type) { this->type = type; }
+    void setMaterialId(int matId) noexcept { this->materialId = matId; }
     
     void print() const;
     
