@@ -46,6 +46,11 @@ viz:
 	@echo "Launching interactive visualization..."
 	@py -3.10 scripts/visualize_interactive.py
 
+# Generate window frame grid
+generate-frame:
+	@echo "Generating window system grid..."
+	@py -3.10 scripts/generate_window_system.py
+
 # Clean build artifacts
 clean:
 	@chmod +x scripts/clean.sh
@@ -60,11 +65,12 @@ init:
 # Display help information
 help:
 	@echo "Available commands:"
-	@echo "  make init      - Set script permissions"
-	@echo "  make build     - Build project"
-	@echo "  make run       - Run executable"
-	@echo "  make dev       - Build and run"
-	@echo "  make viz       - Interactive visualization (Plotly - RECOMMENDED)"
-	@echo "  make visualize - Legacy visualization (Matplotlib)"
-	@echo "  make clean     - Remove build files"
-	@echo "  make docs      - Compile LaTeX documentation"
+	@echo "  make init           - Set script permissions"
+	@echo "  make build          - Build project"
+	@echo "  make run            - Run executable"
+	@echo "  make dev            - Build and run"
+	@echo "  make generate-frame - Generate window frame grid"
+	@echo "  make viz            - Interactive visualization (Plotly - RECOMMENDED)"
+	@echo "  make visualize      - Legacy visualization (Matplotlib)"
+	@echo "  make clean          - Remove build files"
+	@echo "  make docs           - Compile LaTeX documentation"

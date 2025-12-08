@@ -269,10 +269,13 @@ std::vector<double> EquationSystem::solveLinearSystem(std::vector<std::vector<do
             continue;
         }
         
-        // Eliminate column k
+        // Eliminate column k - parallelized
+        const double pivot = A[k][k];
+        #pragma omp parallel for schedule(static) if(n > 50)
         for (int i = k + 1; i < n; ++i) {
-            double factor = A[i][k] / A[k][k];
-            for (int j = k; j <= n; ++j) {
+            double factor = A[i][k] / pivot;
+            A[i][k] = 0.0;  // Explicitly zero out
+            for (int j = k + 1; j <= n; ++j) {
                 A[i][j] -= factor * A[k][j];
             }
         }
@@ -384,12 +387,15 @@ std::vector<std::vector<double>> EquationSystem::solveTransient(double simulatio
     std::vector<double> t_current(n, initialTemp);
     temperatureHistory.push_back(t_current);
     
-    // Pre-compute [C]/dt + [H+Hbc] (left-hand side matrix)
+    // Pre-compute 1/stepTime for efficiency
+    const double invStepTime = 1.0 / stepTime;
+    
+    // Pre-compute [C]/dt + [H+Hbc] (left-hand side matrix) - parallelized
     std::vector<std::vector<double>> LHS(n, std::vector<double>(n, 0.0));
     #pragma omp parallel for schedule(static)
     for (int i = 0; i < n; ++i) {
         for (int j = 0; j < n; ++j) {
-            LHS[i][j] = C_global[i][j] / stepTime + H_global[i][j] + Hbc_global[i][j];
+            LHS[i][j] = C_global[i][j] * invStepTime + H_global[i][j] + Hbc_global[i][j];
         }
     }
     
@@ -408,14 +414,15 @@ std::vector<std::vector<double>> EquationSystem::solveTransient(double simulatio
         for (int i = 0; i < n; ++i) {
             double sum = 0.0;
             for (int j = 0; j < n; ++j) {
-                sum += (C_global[i][j] / stepTime) * t_current[j];
+                sum += C_global[i][j] * t_current[j];
             }
-            RHS[i] = sum + P_global[i];
+            RHS[i] = sum * invStepTime + P_global[i];
         }
         
         // Solve: [LHS]{t^(i+1)} = {RHS}
-        // Create augmented matrix [LHS | RHS]
+        // Create augmented matrix [LHS | RHS] - parallelized
         std::vector<std::vector<double>> A(n, std::vector<double>(n + 1));
+        #pragma omp parallel for schedule(static)
         for (int i = 0; i < n; ++i) {
             for (int j = 0; j < n; ++j) {
                 A[i][j] = LHS[i][j];

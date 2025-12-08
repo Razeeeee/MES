@@ -17,6 +17,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from scipy.interpolate import griddata
+from matplotlib.path import Path
 import sys
 import os
 
@@ -49,11 +50,12 @@ def load_grid_file(grid_file):
     """Load element connectivity and boundary conditions from grid file"""
     elements = []
     boundary_nodes = set()
+    bc_temperatures = {}  # Dictionary: node_id -> BC temperature
     alfa = 25.0  # Default convection coefficient
     tot = 0.0    # Default ambient temperature
     
     if not os.path.exists(grid_file):
-        return elements, boundary_nodes, alfa, tot
+        return elements, boundary_nodes, bc_temperatures, alfa, tot
     
     with open(grid_file, 'r') as f:
         lines = f.readlines()
@@ -94,12 +96,16 @@ def load_grid_file(grid_file):
             for p in parts:
                 if p:
                     if ':' in p:
-                        node_id = int(p.split(':')[0])
+                        node_temp_pair = p.split(':')
+                        node_id = int(node_temp_pair[0])
+                        bc_temp = float(node_temp_pair[1])
+                        bc_temperatures[node_id] = bc_temp
                     else:
                         node_id = int(p)
+                        bc_temperatures[node_id] = None  # BC exists but temperature not specified
                     boundary_nodes.add(node_id)
     
-    return elements, boundary_nodes, alfa, tot
+    return elements, boundary_nodes, bc_temperatures, alfa, tot
 
 
 def find_grid_file():
@@ -193,6 +199,41 @@ def create_mesh_edges(elements, node_ids, x, y, boundary_nodes):
     return internal_edges_x, internal_edges_y, boundary_edges_x, boundary_edges_y
 
 
+def create_element_mask(elements, node_ids, x, y, xi_mesh, yi_mesh):
+    """
+    Create a mask for the interpolation grid to only show values inside elements.
+    Tests each grid point against all elements to ensure accurate masking.
+    """
+    mask = np.zeros_like(xi_mesh, dtype=bool)
+    grid_points = np.column_stack((xi_mesh.ravel(), yi_mesh.ravel()))
+    
+    # Test each element and combine masks
+    for element in elements:
+        # Get coordinates of the 4 nodes forming this element
+        element_coords = []
+        
+        for node_id in element:
+            idx = np.where(node_ids == node_id)[0]
+            if len(idx) > 0:
+                idx = idx[0]
+                element_coords.append([x[idx], y[idx]])
+        
+        if len(element_coords) != 4:
+            continue
+        
+        # Create polygon path for this element (ensure proper winding)
+        polygon = Path(element_coords)
+        
+        # Test all grid points against this polygon
+        in_element = polygon.contains_points(grid_points, radius=1e-9)
+        mask_reshaped = in_element.reshape(xi_mesh.shape)
+        
+        # Add to cumulative mask
+        mask |= mask_reshaped
+    
+    return mask
+
+
 def visualize_interactive(csv_file='data/transient_results.csv'):
     """
     Create interactive Plotly visualization with all features
@@ -203,9 +244,9 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
     # Load grid file for element connectivity
     grid_file = find_grid_file()
     if grid_file:
-        elements, boundary_nodes, alfa, tot = load_grid_file(grid_file)
+        elements, boundary_nodes, bc_temperatures, alfa, tot = load_grid_file(grid_file)
     else:
-        elements, boundary_nodes, alfa, tot = [], set(), 25.0, 0.0
+        elements, boundary_nodes, bc_temperatures, alfa, tot = [], set(), {}, 25.0, 0.0
     
     num_nodes = len(node_ids)
     num_steps = len(time_steps)
@@ -329,6 +370,11 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
     initial_temp = temperatures[:, 0]
     zi_initial = griddata((x, y), initial_temp, (xi_mesh, yi_mesh), method='cubic')
     
+    # Create mask to only show contours inside elements
+    if elements:
+        mask = create_element_mask(elements, node_ids, x, y, xi_mesh, yi_mesh)
+        zi_initial = np.where(mask, zi_initial, np.nan)
+    
     initial_time = time_steps[0]
     
     # Add contour plot (hidden by default)
@@ -357,14 +403,24 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
     ), row=1, col=1 if power_history else None)
     
     # Create hover text for initial state
-    hover_text = [
-        f"Node {int(nid)}<br>" +
-        f"Position: ({x[i]:.4f}, {y[i]:.4f})<br>" +
-        f"Temperature: {temp:.4f}°C<br>" +
-        f"Time: {initial_time:.1f}s" +
-        (f"<br><b>BOUNDARY</b>" if int(nid) in boundary_nodes else "")
-        for i, (nid, temp) in enumerate(zip(node_ids, initial_temp))
-    ]
+    hover_text = []
+    for i, (nid, temp) in enumerate(zip(node_ids, initial_temp)):
+        node_id_int = int(nid)
+        text = (
+            f"Node {node_id_int}<br>" +
+            f"Position: ({x[i]:.4f}, {y[i]:.4f})<br>" +
+            f"Temperature: {temp:.4f}°C<br>" +
+            f"Time: {initial_time:.1f}s"
+        )
+        
+        if node_id_int in boundary_nodes:
+            text += "<br><b>BOUNDARY</b>"
+            if node_id_int in bc_temperatures:
+                bc_temp = bc_temperatures[node_id_int]
+                if bc_temp is not None:
+                    text += f"<br>BC Temp: {bc_temp:.1f}°C"
+        
+        hover_text.append(text)
     
     # Add nodes with temperature colors (visible by default)
     if power_history:
@@ -482,15 +538,29 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
         # Interpolate temperature for contour at this time step
         zi_current = griddata((x, y), temp_current, (xi_mesh, yi_mesh), method='cubic')
         
-        # Create hover text with detailed info
-        hover_text = [
-            f"Node {int(nid)}<br>" +
-            f"Position: ({x[i]:.4f}, {y[i]:.4f})<br>" +
-            f"Temperature: {temp:.4f}°C<br>" +
-            f"Time: {current_time:.1f}s" +
-            (f"<br><b>BOUNDARY</b>" if int(nid) in boundary_nodes else "")
-            for i, (nid, temp) in enumerate(zip(node_ids, temp_current))
-        ]
+        # Apply mask to only show contours inside elements
+        if elements:
+            zi_current = np.where(mask, zi_current, np.nan)
+        
+        # Create hover text with detailed info including BC temperatures
+        hover_text = []
+        for i, (nid, temp) in enumerate(zip(node_ids, temp_current)):
+            node_id_int = int(nid)
+            text = (
+                f"Node {node_id_int}<br>" +
+                f"Position: ({x[i]:.4f}, {y[i]:.4f})<br>" +
+                f"Temperature: {temp:.4f}°C<br>" +
+                f"Time: {current_time:.1f}s"
+            )
+            
+            if node_id_int in boundary_nodes:
+                text += "<br><b>BOUNDARY</b>"
+                if node_id_int in bc_temperatures:
+                    bc_temp = bc_temperatures[node_id_int]
+                    if bc_temp is not None:
+                        text += f"<br>BC Temp: {bc_temp:.1f}°C"
+            
+            hover_text.append(text)
         
         # Node labels for this frame
         label_text = [f"N{int(nid)}<br>{temp:.1f}°C" for nid, temp in zip(node_ids, temp_current)]
@@ -614,6 +684,9 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
         margin=dict(l=80, r=150, t=100, b=180 if power_history else 120)
     )
     
+    # Set updatemenus to paused state (no active button)
+    fig.layout.updatemenus[0].active = -1
+    
     # Update axes for temperature plot
     fig.update_xaxes(
         title_text='X Position [m]',
@@ -668,7 +741,13 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
     
     # Save as HTML and open
     output_file = 'data/temperature_visualization.html'
-    fig.write_html(output_file, auto_open=False)
+    fig.write_html(
+        output_file, 
+        auto_open=False,
+        config={'displayModeBar': True},
+        include_plotlyjs='cdn',
+        auto_play=False  # Disable autoplay
+    )
     print(f"\n✓ Saved interactive visualization to: {output_file}")
     if power_history:
         print(f"  Includes power analysis: {min(power_history):.4f} to {max(power_history):.4f} W/m")
