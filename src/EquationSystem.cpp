@@ -5,6 +5,7 @@
 #include <cmath>
 #include <fstream>
 #include <fstream>
+#include <omp.h>
 
 // Helper function to clean up numerical errors
 static double cleanValue(double value, double tolerance = 1e-10) {
@@ -373,7 +374,8 @@ std::vector<std::vector<double>> EquationSystem::solveTransient(double simulatio
     std::cout << std::string(60, '=') << "\n\n";
     std::cout << "Time: " << simulationTime << " s, Step: " << stepTime 
               << " s, Steps: " << numSteps << "\n";
-    std::cout << "T0: " << initialTemp << " deg C\n\n";
+    std::cout << "T0: " << initialTemp << " deg C\n";
+    std::cout << "OpenMP threads: " << omp_get_max_threads() << "\n\n";
     
     // Store temperature solutions for each time step
     std::vector<std::vector<double>> temperatureHistory;
@@ -399,11 +401,15 @@ std::vector<std::vector<double>> EquationSystem::solveTransient(double simulatio
         
         // Compute right-hand side: ([C]/dt){t^(i)} + {P}
         std::vector<double> RHS(n, 0.0);
+        
+        // Parallelize the matrix-vector multiplication
+        #pragma omp parallel for
         for (int i = 0; i < n; ++i) {
+            double sum = 0.0;
             for (int j = 0; j < n; ++j) {
-                RHS[i] += (C_global[i][j] / stepTime) * t_current[j];
+                sum += (C_global[i][j] / stepTime) * t_current[j];
             }
-            RHS[i] += P_global[i];
+            RHS[i] = sum + P_global[i];
         }
         
         // Solve: [LHS]{t^(i+1)} = {RHS}

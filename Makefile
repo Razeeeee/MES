@@ -18,7 +18,7 @@ dev:
 	@chmod +x scripts/build-run.sh
 	@./scripts/build-run.sh
 
-# Visualize transient results
+# Visualize transient results (legacy matplotlib version)
 visualize:
 	@if [ ! -f data/transient_results.csv ]; then \
 		echo "Error: data/transient_results.csv not found. Run 'make dev' first."; \
@@ -31,6 +31,20 @@ visualize:
 		 exit 1)
 	@echo "Launching transient temperature visualization..."
 	@py -3.10 scripts/visualize_transient.py
+
+# Interactive visualization with Plotly (recommended)
+viz:
+	@if [ ! -f data/transient_results.csv ]; then \
+		echo "Error: data/transient_results.csv not found. Run 'make dev' first."; \
+		exit 1; \
+	fi
+	@echo "Checking Python dependencies..."
+	@py -3.10 -c "import numpy, pandas, plotly, scipy" 2>/dev/null || \
+		(echo "Error: Missing required Python packages." && \
+		 echo "Install with: py -3.10 -m pip install numpy pandas plotly scipy" && \
+		 exit 1)
+	@echo "Launching interactive visualization..."
+	@py -3.10 scripts/visualize_interactive.py
 
 # Clean build artifacts
 clean:
@@ -50,6 +64,7 @@ help:
 	@echo "  make build     - Build project"
 	@echo "  make run       - Run executable"
 	@echo "  make dev       - Build and run"
-	@echo "  make visualize - Show transient temperature animation"
+	@echo "  make viz       - Interactive visualization (Plotly - RECOMMENDED)"
+	@echo "  make visualize - Legacy visualization (Matplotlib)"
 	@echo "  make clean     - Remove build files"
 	@echo "  make docs      - Compile LaTeX documentation"
