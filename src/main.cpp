@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <cmath>
 #include <limits>
+#include <algorithm>
 
 // ===========================================================================
 // HELPER FUNCTIONS
@@ -258,6 +259,45 @@ int main() {
     
     // Export transient results to CSV
     eqSystem.exportTransientResults("data/transient_results.csv", temperatureHistory, nodes, stepTime);
+    
+    // -----------------------------------------------------------------------
+    // POWER CALCULATION (Heat loss through boundaries)
+    // -----------------------------------------------------------------------
+    std::cout << "POWER ANALYSIS\n\n";
+    std::cout << "Calculating power needed to maintain inside temperature...\n\n";
+    
+    // Calculate power for each time step
+    std::vector<double> powerHistory;
+    for (size_t step = 0; step < temperatureHistory.size(); ++step) {
+        double power = eqSystem.calculatePower(temperatureHistory[step], nodes, elements, alfa, tot);
+        powerHistory.push_back(power);
+    }
+    
+    // Display power at each time step
+    std::cout << "Time [s] | Power [W/m] |\n";
+    std::cout << std::string(30, '-') << "\n";
+    
+    for (size_t step = 0; step < powerHistory.size(); ++step) {
+        double time = step * stepTime;
+        std::cout << std::setw(7) << std::fixed << std::setprecision(1) << time << " | "
+                  << std::setw(11) << std::setprecision(4) << powerHistory[step] << " |\n";
+    }
+    
+    // Summary statistics
+    double minPower = *std::min_element(powerHistory.begin(), powerHistory.end());
+    double maxPower = *std::max_element(powerHistory.begin(), powerHistory.end());
+    double avgPower = 0.0;
+    for (double p : powerHistory) avgPower += p;
+    avgPower /= powerHistory.size();
+    
+    std::cout << "\n" << std::string(30, '-') << "\n";
+    std::cout << "Min Power:  " << std::setw(11) << std::fixed << std::setprecision(4) << minPower << " W/m\n";
+    std::cout << "Max Power:  " << std::setw(11) << std::fixed << std::setprecision(4) << maxPower << " W/m\n";
+    std::cout << "Avg Power:  " << std::setw(11) << std::fixed << std::setprecision(4) << avgPower << " W/m\n";
+    std::cout << "Final Power:" << std::setw(11) << std::fixed << std::setprecision(4) << powerHistory.back() << " W/m\n";
+    std::cout << "\nNote: Power is per meter depth (2D simulation)\n";
+    std::cout << "For a window 1.5m wide x 1.0m tall: multiply by 1.0m depth\n";
+    std::cout << std::string(60, '=') << "\n\n";
     
     if (config.shouldPrintFinalResults()) {
         std::cout << "\nFINAL RESULTS (t = " << simulationTime << " s)\n\n";

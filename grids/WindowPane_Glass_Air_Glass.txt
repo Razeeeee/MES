@@ -1,4 +1,4 @@
-SimulationTime 3600
+SimulationTime 7200
 SimulationStepTime 60
 Conductivity 1.0
 Alfa 25

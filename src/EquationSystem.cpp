@@ -473,3 +473,59 @@ void EquationSystem::exportTransientResults(
     file.close();
     std::cout << "Exported transient results to: " << filename << "\n";
 }
+
+double EquationSystem::calculatePower(
+    const std::vector<double>& temperatures,
+    const std::vector<Node>& nodes,
+    const std::vector<Element>& elements,
+    double alfa,
+    double tot) const {
+    
+    // Calculate total power (heat loss) through convective boundaries
+    // Power = alfa * Area * (T_surface - T_ambient)
+    // This represents the heat flow from inside to outside
+    
+    double totalPower = 0.0;
+    
+    // Iterate through all elements to find boundary edges
+    for (const auto& element : elements) {
+        const auto& nodeIds = element.getNodeIds();
+        
+        // Get node coordinates
+        std::vector<double> nodeX(4), nodeY(4);
+        std::vector<double> nodeTemps(4);
+        
+        for (int i = 0; i < 4; ++i) {
+            int nodeIdx = nodeIds[i] - 1;  // Node IDs are 1-based
+            nodeX[i] = nodes[nodeIdx].getX();
+            nodeY[i] = nodes[nodeIdx].getY();
+            nodeTemps[i] = temperatures[nodeIdx];
+        }
+        
+        // Check all 4 edges for boundary condition
+        std::vector<std::pair<int, int>> edges = {{0, 1}, {1, 2}, {2, 3}, {3, 0}};
+        
+        for (const auto& edge : edges) {
+            int n1 = nodeIds[edge.first] - 1;
+            int n2 = nodeIds[edge.second] - 1;
+            
+            // Check if this edge is a boundary
+            if (nodes[n1].isBoundary() && nodes[n2].isBoundary()) {
+                // Calculate edge length
+                double dx = nodeX[edge.second] - nodeX[edge.first];
+                double dy = nodeY[edge.second] - nodeY[edge.first];
+                double edgeLength = std::sqrt(dx * dx + dy * dy);
+                
+                // Average temperature on this edge
+                double avgTemp = (nodeTemps[edge.first] + nodeTemps[edge.second]) / 2.0;
+                
+                // Heat flux: q = alfa * (T_surface - T_ambient)
+                // Power for this edge = q * edge_length (per unit depth)
+                double power = alfa * edgeLength * (avgTemp - tot);
+                totalPower += power;
+            }
+        }
+    }
+    
+    return totalPower;
+}

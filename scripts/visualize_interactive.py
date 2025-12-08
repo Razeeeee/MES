@@ -49,9 +49,11 @@ def load_grid_file(grid_file):
     """Load element connectivity and boundary conditions from grid file"""
     elements = []
     boundary_nodes = set()
+    alfa = 25.0  # Default convection coefficient
+    tot = 0.0    # Default ambient temperature
     
     if not os.path.exists(grid_file):
-        return elements, boundary_nodes
+        return elements, boundary_nodes, alfa, tot
     
     with open(grid_file, 'r') as f:
         lines = f.readlines()
@@ -60,29 +62,35 @@ def load_grid_file(grid_file):
     in_bc_section = False
     
     for line in lines:
-        line = line.strip()
+        line_stripped = line.strip()
         
-        if line.startswith('*Element'):
+        # Read alfa and Tot from header
+        if line_stripped.startswith('Alfa '):
+            alfa = float(line_stripped.split()[1])
+        elif line_stripped.startswith('Tot '):
+            tot = float(line_stripped.split()[1])
+        
+        if line_stripped.startswith('*Element'):
             in_element_section = True
             in_bc_section = False
             continue
-        elif line.startswith('*BC'):
+        elif line_stripped.startswith('*BC'):
             in_element_section = False
             in_bc_section = True
             continue
-        elif line.startswith('*'):
+        elif line_stripped.startswith('*'):
             in_element_section = False
             in_bc_section = False
             continue
         
-        if in_element_section and line:
-            parts = [p.strip() for p in line.split(',')]
+        if in_element_section and line_stripped:
+            parts = [p.strip() for p in line_stripped.split(',')]
             if len(parts) >= 5:
                 element_nodes = [int(parts[i]) for i in range(1, 5)]
                 elements.append(element_nodes)
         
-        if in_bc_section and line:
-            parts = [p.strip() for p in line.split(',')]
+        if in_bc_section and line_stripped:
+            parts = [p.strip() for p in line_stripped.split(',')]
             for p in parts:
                 if p:
                     if ':' in p:
@@ -91,7 +99,7 @@ def load_grid_file(grid_file):
                         node_id = int(p)
                     boundary_nodes.add(node_id)
     
-    return elements, boundary_nodes
+    return elements, boundary_nodes, alfa, tot
 
 
 def find_grid_file():
@@ -103,6 +111,56 @@ def find_grid_file():
             grid_files.sort(key=lambda f: os.path.getmtime(os.path.join(grid_dir, f)), reverse=True)
             return os.path.join(grid_dir, grid_files[0])
     return None
+
+
+def calculate_power(elements, node_ids, x, y, temperatures, boundary_nodes, alfa, tot):
+    """
+    Calculate power (heat loss) through convective boundaries
+    Power = alfa * edge_length * (T_surface - T_ambient)
+    Returns power in W/m (per unit depth)
+    """
+    total_power = 0.0
+    
+    for element in elements:
+        # Get node coordinates and temperatures for this element
+        node_x = []
+        node_y = []
+        node_temps = []
+        
+        for node_id in element:
+            idx = np.where(node_ids == node_id)[0]
+            if len(idx) > 0:
+                idx = idx[0]
+                node_x.append(x[idx])
+                node_y.append(y[idx])
+                node_temps.append(temperatures[idx])
+        
+        if len(node_x) != 4:
+            continue
+        
+        # Check all 4 edges for boundary condition
+        edges = [(0, 1), (1, 2), (2, 3), (3, 0)]
+        
+        for edge_start, edge_end in edges:
+            node1_id = element[edge_start]
+            node2_id = element[edge_end]
+            
+            # Check if this edge is a boundary
+            if node1_id in boundary_nodes and node2_id in boundary_nodes:
+                # Calculate edge length
+                dx = node_x[edge_end] - node_x[edge_start]
+                dy = node_y[edge_end] - node_y[edge_start]
+                edge_length = np.sqrt(dx**2 + dy**2)
+                
+                # Average temperature on this edge
+                avg_temp = (node_temps[edge_start] + node_temps[edge_end]) / 2.0
+                
+                # Heat flux: q = alfa * (T_surface - T_ambient)
+                # Power for this edge = q * edge_length (per unit depth)
+                power = alfa * edge_length * (avg_temp - tot)
+                total_power += power
+    
+    return total_power
 
 
 def create_mesh_edges(elements, node_ids, x, y, boundary_nodes):
@@ -144,7 +202,10 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
     
     # Load grid file for element connectivity
     grid_file = find_grid_file()
-    elements, boundary_nodes = load_grid_file(grid_file) if grid_file else ([], set())
+    if grid_file:
+        elements, boundary_nodes, alfa, tot = load_grid_file(grid_file)
+    else:
+        elements, boundary_nodes, alfa, tot = [], set(), 25.0, 0.0
     
     num_nodes = len(node_ids)
     num_steps = len(time_steps)
@@ -156,14 +217,38 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
     if grid_file:
         print(f"Grid file: {grid_file}")
         print(f"Elements: {len(elements)}")
-        print(f"Boundary nodes: {len(boundary_nodes)}\n")
+        print(f"Boundary nodes: {len(boundary_nodes)}")
+        print(f"Alfa (convection): {alfa} W/(m²·K)")
+        print(f"T_ambient: {tot}°C\n")
+    
+    # Calculate power for all time steps
+    power_history = []
+    if elements and boundary_nodes:
+        print("Calculating power at each time step...")
+        for step in range(num_steps):
+            power = calculate_power(elements, node_ids, x, y, temperatures[:, step], 
+                                   boundary_nodes, alfa, tot)
+            power_history.append(power)
+        
+        print(f"Power range: {min(power_history):.4f} to {max(power_history):.4f} W/m")
+        print(f"Average power: {np.mean(power_history):.4f} W/m")
+        print(f"Final power: {power_history[-1]:.4f} W/m\n")
     
     # Global temperature range for consistent colorbar
     temp_min = temperatures.min()
     temp_max = temperatures.max()
     
-    # Create figure
-    fig = go.Figure()
+    # Create figure with subplots
+    if power_history:
+        fig = make_subplots(
+            rows=2, cols=1,
+            row_heights=[0.75, 0.25],
+            vertical_spacing=0.12,
+            subplot_titles=('Temperature Distribution', 'Power Required to Maintain Temperature'),
+            specs=[[{"type": "xy"}], [{"type": "xy"}]]
+        )
+    else:
+        fig = go.Figure()
     
     # Create mesh edges
     if elements:
@@ -173,29 +258,53 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
         
         # Add internal edges (thin, blue)
         if internal_x:
-            fig.add_trace(go.Scatter(
-                x=internal_x,
-                y=internal_y,
-                mode='lines',
-                line=dict(color='rgba(100, 150, 200, 0.4)', width=1),
-                hoverinfo='skip',
-                showlegend=True,
-                name='Internal Mesh',
-                visible=True
-            ))
+            if power_history:
+                fig.add_trace(go.Scatter(
+                    x=internal_x,
+                    y=internal_y,
+                    mode='lines',
+                    line=dict(color='rgba(100, 150, 200, 0.4)', width=1),
+                    hoverinfo='skip',
+                    showlegend=True,
+                    name='Internal Mesh',
+                    visible=True
+                ), row=1, col=1)
+            else:
+                fig.add_trace(go.Scatter(
+                    x=internal_x,
+                    y=internal_y,
+                    mode='lines',
+                    line=dict(color='rgba(100, 150, 200, 0.4)', width=1),
+                    hoverinfo='skip',
+                    showlegend=True,
+                    name='Internal Mesh',
+                    visible=True
+                ))
         
         # Add boundary edges (thick, red)
         if boundary_x:
-            fig.add_trace(go.Scatter(
-                x=boundary_x,
-                y=boundary_y,
-                mode='lines',
-                line=dict(color='rgba(255, 0, 0, 0.8)', width=3),
-                hoverinfo='skip',
-                showlegend=True,
-                name='Boundary',
-                visible=True
-            ))
+            if power_history:
+                fig.add_trace(go.Scatter(
+                    x=boundary_x,
+                    y=boundary_y,
+                    mode='lines',
+                    line=dict(color='rgba(255, 0, 0, 0.8)', width=3),
+                    hoverinfo='skip',
+                    showlegend=True,
+                    name='Boundary',
+                    visible=True
+                ), row=1, col=1)
+            else:
+                fig.add_trace(go.Scatter(
+                    x=boundary_x,
+                    y=boundary_y,
+                    mode='lines',
+                    line=dict(color='rgba(255, 0, 0, 0.8)', width=3),
+                    hoverinfo='skip',
+                    showlegend=True,
+                    name='Boundary',
+                    visible=True
+                ))
     
     # Determine marker sizes based on number of nodes
     if num_nodes < 20:
@@ -245,7 +354,7 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
         name='Contour Plot',
         visible='legendonly',  # Hidden by default
         showscale=False  # Don't show separate colorbar (will use nodes colorbar)
-    ))
+    ), row=1, col=1 if power_history else None)
     
     # Create hover text for initial state
     hover_text = [
@@ -258,45 +367,110 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
     ]
     
     # Add nodes with temperature colors (visible by default)
-    fig.add_trace(go.Scatter(
-        x=x,
-        y=y,
-        mode='markers',
-        marker=dict(
-            size=marker_size,
-            color=initial_temp,
-            colorscale='RdYlBu_r',
-            cmin=temp_min,
-            cmax=temp_max,
-            colorbar=dict(
-                title="Temp [°C]",
-                thickness=20,
-                len=0.7,
-                x=1.02
+    if power_history:
+        fig.add_trace(go.Scatter(
+            x=x,
+            y=y,
+            mode='markers',
+            marker=dict(
+                size=marker_size,
+                color=initial_temp,
+                colorscale='RdYlBu_r',
+                cmin=temp_min,
+                cmax=temp_max,
+                colorbar=dict(
+                    title="Temp [°C]",
+                    thickness=20,
+                    len=0.7,
+                    x=1.02
+                ),
+                line=dict(color='black', width=2)
             ),
-            line=dict(color='black', width=2)
-        ),
-        text=hover_text,
-        hoverinfo='text',
-        showlegend=True,
-        name='Nodes',
-        visible=True  # Visible by default, can be toggled
-    ))
+            text=hover_text,
+            hoverinfo='text',
+            showlegend=True,
+            name='Nodes',
+            visible=True  # Visible by default, can be toggled
+        ), row=1, col=1)
+    else:
+        fig.add_trace(go.Scatter(
+            x=x,
+            y=y,
+            mode='markers',
+            marker=dict(
+                size=marker_size,
+                color=initial_temp,
+                colorscale='RdYlBu_r',
+                cmin=temp_min,
+                cmax=temp_max,
+                colorbar=dict(
+                    title="Temp [°C]",
+                    thickness=20,
+                    len=0.7,
+                    x=1.02
+                ),
+                line=dict(color='black', width=2)
+            ),
+            text=hover_text,
+            hoverinfo='text',
+            showlegend=True,
+            name='Nodes',
+            visible=True  # Visible by default, can be toggled
+        ))
     
     # Add node labels
     label_text = [f"N{int(nid)}<br>{temp:.1f}°C" for nid, temp in zip(node_ids, initial_temp)]
-    fig.add_trace(go.Scatter(
-        x=x,
-        y=y,
-        mode='text',
-        text=label_text,
-        textposition='bottom center',
-        textfont=dict(size=label_font_size, color='black', family='Arial Black'),
-        hoverinfo='skip',
-        showlegend=True,
-        name='Labels',
-        visible='legendonly'  # Hidden by default, can be toggled
-    ))
+    if power_history:
+        fig.add_trace(go.Scatter(
+            x=x,
+            y=y,
+            mode='text',
+            text=label_text,
+            textposition='bottom center',
+            textfont=dict(size=label_font_size, color='black', family='Arial Black'),
+            hoverinfo='skip',
+            showlegend=True,
+            name='Labels',
+            visible='legendonly'  # Hidden by default, can be toggled
+        ), row=1, col=1)
+    else:
+        fig.add_trace(go.Scatter(
+            x=x,
+            y=y,
+            mode='text',
+            text=label_text,
+            textposition='bottom center',
+            textfont=dict(size=label_font_size, color='black', family='Arial Black'),
+            hoverinfo='skip',
+            showlegend=True,
+            name='Labels',
+            visible='legendonly'  # Hidden by default, can be toggled
+        ))
+    
+    # Add power plot if available
+    if power_history:
+        fig.add_trace(go.Scatter(
+            x=time_steps,
+            y=power_history,
+            mode='lines+markers',
+            line=dict(color='darkgreen', width=3),
+            marker=dict(size=8, color='green'),
+            name='Power',
+            hovertemplate='Time: %{x:.1f}s<br>Power: %{y:.4f} W/m<extra></extra>',
+            showlegend=False
+        ), row=2, col=1)
+        
+        # Add average power line
+        avg_power = np.mean(power_history)
+        fig.add_trace(go.Scatter(
+            x=[time_steps[0], time_steps[-1]],
+            y=[avg_power, avg_power],
+            mode='lines',
+            line=dict(color='red', width=2, dash='dash'),
+            name=f'Avg: {avg_power:.4f} W/m',
+            hoverinfo='skip',
+            showlegend=True
+        ), row=2, col=1)
     
     # Create frames for animation
     frames = []
@@ -327,6 +501,8 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
         nodes_trace_idx = num_edge_traces + 1  # Nodes after contour
         labels_trace_idx = num_edge_traces + 2  # Labels after nodes
         
+        # Only update temperature-related traces, not power plot
+        # Remove layout update to prevent power plot from redrawing
         frames.append(go.Frame(
             data=[
                 go.Contour(z=zi_current),  # Update contour
@@ -337,22 +513,27 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
                 go.Scatter(text=label_text)  # Update labels
             ],
             traces=[contour_trace_idx, nodes_trace_idx, labels_trace_idx],
-            name=str(step),
-            layout=go.Layout(
-                title_text=f"Temperature Distribution - t = {current_time:.1f}s (Step {step + 1}/{num_steps})"
-            )
+            name=str(step)
         ))
     
     fig.frames = frames
     
     # Add animation controls
+    # Position controls based on whether power plot is shown
+    if power_history:
+        slider_y = -0.15  # Below power plot
+        button_y = -0.15
+    else:
+        slider_y = 0.02
+        button_y = 0.02
+    
     fig.update_layout(
         updatemenus=[
             dict(
                 type='buttons',
                 showactive=False,
                 x=0.05,
-                y=0.02,
+                y=button_y,
                 xanchor='left',
                 yanchor='bottom',
                 buttons=[
@@ -360,7 +541,7 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
                         label='▶ Play',
                         method='animate',
                         args=[None, dict(
-                            frame=dict(duration=200, redraw=True),
+                            frame=dict(duration=500, redraw=True),
                             fromcurrent=True,
                             mode='immediate',
                             transition=dict(duration=0)
@@ -381,7 +562,7 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
         sliders=[dict(
             active=0,
             yanchor='bottom',
-            y=0.02,
+            y=slider_y,
             xanchor='left',
             x=0.25,
             currentvalue=dict(
@@ -410,31 +591,15 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
     
     fig.update_layout(
         title=dict(
-            text=f"Temperature Distribution - t = {time_steps[0]:.1f}s (Step 1/{num_steps})",
+            text=f"FEM Heat Transfer Analysis - t = {time_steps[0]:.1f}s (Step 1/{num_steps})",
             font=dict(size=18, family='Arial Black'),
             x=0.5,
             xanchor='center'
         ),
-        xaxis=dict(
-            title=dict(text='X Position [m]', font=dict(size=14)),
-            range=[x.min() - x_range * padding, x.max() + x_range * padding],
-            scaleanchor='y',
-            scaleratio=1,
-            showgrid=True,
-            gridcolor='lightgray',
-            zeroline=False
-        ),
-        yaxis=dict(
-            title=dict(text='Y Position [m]', font=dict(size=14)),
-            range=[y.min() - y_range * padding, y.max() + y_range * padding],
-            showgrid=True,
-            gridcolor='lightgray',
-            zeroline=False
-        ),
         plot_bgcolor='#f5f5f5',
         paper_bgcolor='white',
         width=1200,
-        height=900,
+        height=1000 if power_history else 900,
         hovermode='closest',
         legend=dict(
             orientation='v',
@@ -446,8 +611,45 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
             bordercolor='black',
             borderwidth=1
         ),
-        margin=dict(l=80, r=150, t=100, b=120)
+        margin=dict(l=80, r=150, t=100, b=180 if power_history else 120)
     )
+    
+    # Update axes for temperature plot
+    fig.update_xaxes(
+        title_text='X Position [m]',
+        range=[x.min() - x_range * padding, x.max() + x_range * padding],
+        scaleanchor='y',
+        scaleratio=1,
+        showgrid=True,
+        gridcolor='lightgray',
+        zeroline=False,
+        row=1, col=1
+    )
+    
+    fig.update_yaxes(
+        title_text='Y Position [m]',
+        range=[y.min() - y_range * padding, y.max() + y_range * padding],
+        showgrid=True,
+        gridcolor='lightgray',
+        zeroline=False,
+        row=1, col=1
+    )
+    
+    # Update axes for power plot
+    if power_history:
+        fig.update_xaxes(
+            title_text='Time [s]',
+            showgrid=True,
+            gridcolor='lightgray',
+            row=2, col=1
+        )
+        
+        fig.update_yaxes(
+            title_text='Power [W/m]',
+            showgrid=True,
+            gridcolor='lightgray',
+            row=2, col=1
+        )
     
     print("Creating interactive visualization...")
     print("\nFeatures:")
@@ -460,12 +662,16 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
     print("    - Contour Plot - hidden by default")
     print("    - Mesh/Boundary - visible by default")
     print("  • Animate: Use Play button or time slider")
+    if power_history:
+        print("  • Power Plot: Shows heat loss through boundaries over time")
     print("\nOpening browser...")
     
     # Save as HTML and open
     output_file = 'data/temperature_visualization.html'
-    fig.write_html(output_file, auto_open=True)
+    fig.write_html(output_file, auto_open=False)
     print(f"\n✓ Saved interactive visualization to: {output_file}")
+    if power_history:
+        print(f"  Includes power analysis: {min(power_history):.4f} to {max(power_history):.4f} W/m")
     print("  You can share this HTML file - it's fully self-contained!\n")
 
 

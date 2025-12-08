@@ -62,6 +62,13 @@ public:
                                const std::vector<class Node>& nodes,
                                double stepTime) const;
     
+    // Calculate power needed to maintain temperature (heat loss through boundary)
+    double calculatePower(const std::vector<double>& temperatures,
+                         const std::vector<class Node>& nodes,
+                         const std::vector<class Element>& elements,
+                         double alfa,
+                         double tot) const;
+    
     bool isSymmetric(double tolerance = 1e-10) const;
     double getTrace() const;
     double getSumOfElements() const;
