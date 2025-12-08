@@ -1,9 +1,9 @@
 #include "EquationSystem.h"
 #include "Node.h"
+#include "Element.h"
 #include <iostream>
 #include <iomanip>
 #include <cmath>
-#include <fstream>
 #include <fstream>
 #include <omp.h>
 
@@ -386,6 +386,7 @@ std::vector<std::vector<double>> EquationSystem::solveTransient(double simulatio
     
     // Pre-compute [C]/dt + [H+Hbc] (left-hand side matrix)
     std::vector<std::vector<double>> LHS(n, std::vector<double>(n, 0.0));
+    #pragma omp parallel for schedule(static)
     for (int i = 0; i < n; ++i) {
         for (int j = 0; j < n; ++j) {
             LHS[i][j] = C_global[i][j] / stepTime + H_global[i][j] + Hbc_global[i][j];
@@ -403,7 +404,7 @@ std::vector<std::vector<double>> EquationSystem::solveTransient(double simulatio
         std::vector<double> RHS(n, 0.0);
         
         // Parallelize the matrix-vector multiplication
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(static)
         for (int i = 0; i < n; ++i) {
             double sum = 0.0;
             for (int j = 0; j < n; ++j) {
@@ -478,6 +479,7 @@ double EquationSystem::calculatePower(
     const std::vector<double>& temperatures,
     const std::vector<Node>& nodes,
     const std::vector<Element>& elements,
+    const std::set<int>& boundaryConditions,
     double alfa,
     double tot) const {
     
@@ -506,11 +508,14 @@ double EquationSystem::calculatePower(
         std::vector<std::pair<int, int>> edges = {{0, 1}, {1, 2}, {2, 3}, {3, 0}};
         
         for (const auto& edge : edges) {
-            int n1 = nodeIds[edge.first] - 1;
-            int n2 = nodeIds[edge.second] - 1;
+            int nodeId1 = nodeIds[edge.first];
+            int nodeId2 = nodeIds[edge.second];
             
-            // Check if this edge is a boundary
-            if (nodes[n1].isBoundary() && nodes[n2].isBoundary()) {
+            // Check if both nodes on this edge are in boundary conditions
+            bool isBoundary = (boundaryConditions.find(nodeId1) != boundaryConditions.end()) &&
+                             (boundaryConditions.find(nodeId2) != boundaryConditions.end());
+            
+            if (isBoundary) {
                 // Calculate edge length
                 double dx = nodeX[edge.second] - nodeX[edge.first];
                 double dy = nodeY[edge.second] - nodeY[edge.first];

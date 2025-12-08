@@ -303,7 +303,10 @@ EquationSystem Grid::assembleGlobalEquationSystem(int numGaussPointsH, int numGa
     
     // Assemble global matrices by iterating through all elements
     // FEM Assembly: Σ (local contributions) → global matrices
-    for (const auto& element : elements) {
+    // Parallel assembly with critical section for global matrix updates
+    #pragma omp parallel for schedule(dynamic)
+    for (size_t elem_idx = 0; elem_idx < elements.size(); ++elem_idx) {
+        const auto& element = elements[elem_idx];
         // Get node IDs for this element (1-indexed in grid file)
         const auto& nodeIds = element.getNodeIds();
         
@@ -334,19 +337,23 @@ EquationSystem Grid::assembleGlobalEquationSystem(int numGaussPointsH, int numGa
         
         // Assemble local matrices into global system
         // Map from local element indices (0-3) to global node indices
-        for (size_t i = 0; i < nodeIds.size(); ++i) {
-            int globalI = nodeIds[i] - 1; // Convert to 0-indexed
-            
-            // Add local P contribution to global P vector
-            eqSystem.addToPVector(globalI, localP[i]);
-            
-            for (size_t j = 0; j < nodeIds.size(); ++j) {
-                int globalJ = nodeIds[j] - 1; // Convert to 0-indexed
+        // Use critical section to prevent race conditions during global assembly
+        #pragma omp critical
+        {
+            for (size_t i = 0; i < nodeIds.size(); ++i) {
+                int globalI = nodeIds[i] - 1; // Convert to 0-indexed
                 
-                // Add local contributions to global matrices
-                eqSystem.addToHMatrix(globalI, globalJ, localH[i][j]);
-                eqSystem.addToHbcMatrix(globalI, globalJ, localHbc[i][j]);
-                eqSystem.addToCMatrix(globalI, globalJ, localC[i][j]);
+                // Add local P contribution to global P vector
+                eqSystem.addToPVector(globalI, localP[i]);
+                
+                for (size_t j = 0; j < nodeIds.size(); ++j) {
+                    int globalJ = nodeIds[j] - 1; // Convert to 0-indexed
+                    
+                    // Add local contributions to global matrices
+                    eqSystem.addToHMatrix(globalI, globalJ, localH[i][j]);
+                    eqSystem.addToHbcMatrix(globalI, globalJ, localHbc[i][j]);
+                    eqSystem.addToCMatrix(globalI, globalJ, localC[i][j]);
+                }
             }
         }
     }

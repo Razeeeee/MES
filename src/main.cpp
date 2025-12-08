@@ -8,6 +8,7 @@
 #include <cmath>
 #include <limits>
 #include <algorithm>
+#include <omp.h>
 
 // ===========================================================================
 // HELPER FUNCTIONS
@@ -53,6 +54,14 @@ void printVector(const std::vector<double>& vector, const std::string& name) {
 
 int main() {
     std::cout << std::fixed << std::setprecision(6);
+    
+    // -----------------------------------------------------------------------
+    // SET OPENMP THREADS
+    // -----------------------------------------------------------------------
+    #ifdef _OPENMP
+    omp_set_num_threads(omp_get_max_threads());
+    std::cout << "OpenMP enabled with " << omp_get_max_threads() << " threads\n\n";
+    #endif
     
     // -----------------------------------------------------------------------
     // LOAD CONFIGURATION
@@ -269,7 +278,7 @@ int main() {
     // Calculate power for each time step
     std::vector<double> powerHistory;
     for (size_t step = 0; step < temperatureHistory.size(); ++step) {
-        double power = eqSystem.calculatePower(temperatureHistory[step], nodes, elements, alfa, tot);
+        double power = eqSystem.calculatePower(temperatureHistory[step], nodes, elements, boundaryConditions, alfa, tot);
         powerHistory.push_back(power);
     }
     

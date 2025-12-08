@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <string>
+#include <set>
 
 // Global FEM equation system with solver methods
 class EquationSystem {
@@ -66,6 +67,7 @@ public:
     double calculatePower(const std::vector<double>& temperatures,
                          const std::vector<class Node>& nodes,
                          const std::vector<class Element>& elements,
+                         const std::set<int>& boundaryConditions,
                          double alfa,
                          double tot) const;
     
