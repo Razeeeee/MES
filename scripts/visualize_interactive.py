@@ -280,11 +280,12 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
     temp_max = temperatures.max()
     
     # Create figure with subplots
+    # Temperature graph takes full viewport height, power/slider go below
     if power_history:
         fig = make_subplots(
             rows=2, cols=1,
-            row_heights=[0.75, 0.25],
-            vertical_spacing=0.12,
+            row_heights=[0.85, 0.15],
+            vertical_spacing=0.02,
             subplot_titles=('Temperature Distribution', 'Power Required to Maintain Temperature'),
             specs=[[{"type": "xy"}], [{"type": "xy"}]]
         )
@@ -589,10 +590,10 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
     fig.frames = frames
     
     # Add animation controls
-    # Position controls based on whether power plot is shown
+    # Position controls below the power plot
     if power_history:
-        slider_y = -0.15  # Below power plot
-        button_y = -0.15
+        slider_y = -0.25  # Below power plot
+        button_y = -0.25
     else:
         slider_y = 0.02
         button_y = 0.02
@@ -668,8 +669,8 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
         ),
         plot_bgcolor='#f5f5f5',
         paper_bgcolor='white',
-        width=1200,
-        height=1000 if power_history else 900,
+        width=1400,
+        height=1400 if power_history else 900,
         hovermode='closest',
         legend=dict(
             orientation='v',
@@ -681,7 +682,7 @@ def visualize_interactive(csv_file='data/transient_results.csv'):
             bordercolor='black',
             borderwidth=1
         ),
-        margin=dict(l=80, r=150, t=100, b=180 if power_history else 120)
+        margin=dict(l=80, r=150, t=100, b=250 if power_history else 120)
     )
     
     # Set updatemenus to paused state (no active button)
