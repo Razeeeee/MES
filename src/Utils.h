@@ -30,6 +30,4 @@ void printMatrix(const std::vector<std::vector<double>>& matrix, const std::stri
  */
 void printVector(const std::vector<double>& vector, const std::string& name);
 
-} // namespace Utils
-
-#endif // UTILS_H
+}
