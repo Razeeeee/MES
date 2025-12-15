@@ -230,6 +230,38 @@ std::vector<double> EquationSystem::solveLinearSystem(std::vector<std::vector<do
     // Solve linear system using Gaussian elimination with partial pivoting
     // Input: augmented matrix [A | b]
     // Output: solution vector x
+
+    /*
+    Początek:
+    [2   1   -1   8  | 8]     wiersz 0
+    [4   2    3   1  | 5]     wiersz 1
+    [-2  5    1   2  | 7]     wiersz 2
+    [1   3    2   -1 | 3]     wiersz 3
+
+    k=0: Pivot = wiersz 1 (|4| jest największe)
+
+    Po zamianie i eliminacji k=0:
+    [4   2    3    1 | 5]     pivot row
+    [0   0   -2.5  7.5| 5.5]  wiersz 0: factor = 2/4 = 0.5
+    [0   6    2.5  2.5| 9.5]  wiersz 2: factor = -2/4 = -0.5
+    [0   2.5  0.75 -1.25| 1.75] wiersz 3: factor = 1/4 = 0.25
+
+    k=1: Pivot = wiersz 2 (|6| jest największe)
+
+    Po zamianie i eliminacji k=1:
+    [4   2    3      1   | 5]
+    [0   6    2.5    2.5 | 9.5]   pivot row
+    [0   0   -3.54   6.46| 1.54]  factor = 0/6 = 0
+    [0   0   -0.29  -2.29| -2.21] factor = 2.5/6 = 0.417
+
+    k=2: (ostatnia eliminacja)
+
+    Macierz górnotrójkątna:
+    [4   2    3      1   | 5]
+    [0   6    2.5    2.5 | 9.5]
+    [0   0   -3.54   6.46| 1.54]
+    [0   0    0     -1.76| -2.29]
+    */
     
     int n = A.size();
     if (n == 0 || A[0].size() != static_cast<size_t>(n + 1)) {
@@ -270,6 +302,26 @@ std::vector<double> EquationSystem::solveLinearSystem(std::vector<std::vector<do
         }
     }
     
+    /*
+    Macierz końcowa:
+    [4   2    3      1   | 5]
+    [0   6    2.5    2.5 | 9.5]
+    [0   0   -3.54   6.46| 1.54]
+    [0   0    0     -1.76| -2.29]
+
+    i=3: x[3] = -2.29 / -1.76 = 1.301
+
+    i=2: sum = 1.54 - 6.46*1.301 = -6.864
+        x[2] = -6.864 / -3.54 = 1.939
+
+    i=1: sum = 9.5 - 2.5*1.939 - 2.5*1.301 = 1.4
+        x[1] = 1.4 / 6 = 0.233
+
+    i=0: sum = 5 - 2*0.233 - 3*1.939 - 1*1.301 = -2.352
+        x[0] = -2.352 / 4 = -0.588
+    */
+
+
     // Back substitution
     std::vector<double> solution(n);
     
@@ -355,6 +407,7 @@ void EquationSystem::printSolution(const std::vector<double>& temperatures) cons
     }
 }
 
+// ([C]/Δt + [H]) * T^(n+1) = [C]/Δt * T^n + {P}
 std::vector<std::vector<double>> EquationSystem::solveTransient(double simulationTime, 
                                                                 double stepTime,
                                                                 double initialTemp) const {

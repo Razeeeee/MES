@@ -20,20 +20,17 @@ bool Grid::loadFromFile(const std::string& filename) {
         return false;
     }
     
-    std::string line;
-    std::string currentSection = "";
-    
-    // Clear existing data
     nodes.clear();
     elements.clear();
     boundaryConditions.clear();
     
+    std::vector<std::string> nodeLines, elementLines;
+    std::string line, currentSection;
+    
     while (std::getline(file, line)) {
         line = trim(line);
-        
         if (line.empty()) continue;
         
-        // Check for section headers
         if (line.find("*Node") == 0) {
             currentSection = "NODE";
             continue;
@@ -45,20 +42,27 @@ bool Grid::loadFromFile(const std::string& filename) {
             continue;
         }
         
-        // Parse data based on current section
         if (currentSection == "NODE") {
-            parseNode(line);
+            nodeLines.push_back(line);
         } else if (currentSection == "ELEMENT") {
-            parseElement(line);
+            elementLines.push_back(line);
         } else if (currentSection == "BC") {
             parseBoundaryConditions(line);
         } else {
-            // Parse global data (before any section)
             parseGlobalData(line);
         }
     }
     
     file.close();
+    
+    for (const auto& nodeLine : nodeLines) {
+        parseNode(nodeLine);
+    }
+    
+    for (const auto& elemLine : elementLines) {
+        parseElement(elemLine);
+    }
+    
     std::cout << "Loaded: " << filename << "\n";
     return true;
 }
@@ -102,7 +106,6 @@ void Grid::parseGlobalData(const std::string& line) {
 }
 
 void Grid::parseNode(const std::string& line) {
-    // Remove leading/trailing whitespace and commas
     std::string cleanLine = line;
     std::replace(cleanLine.begin(), cleanLine.end(), ',', ' ');
     
@@ -111,7 +114,8 @@ void Grid::parseNode(const std::string& line) {
     double x, y;
     
     if (iss >> id >> x >> y) {
-        nodes.emplace_back(id, x, y);
+        bool hasBC = (boundaryConditions.count(id) > 0);
+        nodes.emplace_back(id, x, y, hasBC);
     }
 }
 
@@ -245,58 +249,43 @@ void Grid::printNodesIdAndCoordinates() const {
     std::cout << "Total nodes: " << nodes.size() << std::endl;
 }
 
-EquationSystem Grid::assembleGlobalEquationSystem(int numGaussPointsH, int numGaussPointsC, int numGaussPointsBoundary) const {
-    (void)numGaussPointsC; // Unused - C matrix calculated per element
-    // Get the number of nodes (size of global system matrices)
+EquationSystem Grid::assembleGlobalEquationSystem(int numGaussPointsH, int numGaussPointsC, int /*numGaussPointsBoundary*/) const {
     int N = nodes.size();
-    
-    // Initialize equation system with size N
     EquationSystem eqSystem(N);
     
-    // Get material and boundary properties from global data
     double conductivity = globalData.getConductivity();
     double alfa = globalData.getAlfa();
     double tot = globalData.getTot();
     double density = globalData.getDensity();
     double specificHeat = globalData.getSpecificHeat();
     
-    // Assemble global matrices by iterating through all elements
-    // FEM Assembly: Σ (local contributions) → global matrices
-    for (const auto& element : elements) {
-        // Get node IDs for this element (1-indexed in grid file)
+    for (auto& element : elements) {
         const auto& nodeIds = element.getNodeIds();
         
-        // Extract node coordinates for this element [4 nodes]
         std::vector<double> nodeX(4), nodeY(4);
         for (size_t i = 0; i < nodeIds.size(); ++i) {
-            const Node& node = nodes[nodeIds[i] - 1]; // Convert to 0-indexed
+            const Node& node = nodes[nodeIds[i] - 1];
             nodeX[i] = node.getX();
             nodeY[i] = node.getY();
         }
         
-        // OPTIMIZED: Calculate H and C matrices together (single Jacobian calculation per integration point)
-        auto [localH, localC] = element.calculateHAndCMatrices(
-            nodeX, nodeY, conductivity, density, specificHeat, numGaussPointsH);
-        
-        // Determine which edges have convection boundary conditions
         auto boundaryEdges = getElementBoundaryEdges(element);
         
-        // OPTIMIZED: Calculate Hbc and P together for boundary conditions
-        auto [localHbc, localP] = element.calculateHbcAndPVector(
-            nodeX, nodeY, alfa, tot, boundaryEdges, numGaussPointsBoundary);
+        const_cast<Element&>(element).calculateLocalMatrices(
+            nodeX, nodeY, conductivity, density, specificHeat,
+            alfa, tot, boundaryEdges, numGaussPointsH);
         
-        // Assemble local matrices into global system
-        // Map from local element indices (0-3) to global node indices
+        const auto& localH = element.getHLocal();
+        const auto& localC = element.getCLocal();
+        const auto& localHbc = element.getHbcLocal();
+        const auto& localP = element.getPLocal();
+        
         for (size_t i = 0; i < nodeIds.size(); ++i) {
-            int globalI = nodeIds[i] - 1; // Convert to 0-indexed
-            
-            // Add local P contribution to global P vector
+            int globalI = nodeIds[i] - 1;
             eqSystem.addToPVector(globalI, localP[i]);
             
             for (size_t j = 0; j < nodeIds.size(); ++j) {
-                int globalJ = nodeIds[j] - 1; // Convert to 0-indexed
-                
-                // Add local contributions to global matrices
+                int globalJ = nodeIds[j] - 1;
                 eqSystem.addToHMatrix(globalI, globalJ, localH[i][j]);
                 eqSystem.addToHbcMatrix(globalI, globalJ, localHbc[i][j]);
                 eqSystem.addToCMatrix(globalI, globalJ, localC[i][j]);

@@ -17,10 +17,18 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 # Include directories
 include_directories(src)
 
-# Source files - explicitly list to avoid archive folder
-file(GLOB SOURCES 
-    "src/*.cpp" 
-    "src/*.h"
+# Source files - explicitly list all source files
+set(SOURCES
+    src/main.cpp
+    src/Config.cpp
+    src/Element.cpp
+    src/EquationSystem.cpp
+    src/GaussianIntegration.cpp
+    src/GlobalData.cpp
+    src/Grid.cpp
+    src/GridSelector.cpp
+    src/Node.cpp
+    src/Utils.cpp
 )
 
 # Create executable

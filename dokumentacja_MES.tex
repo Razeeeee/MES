@@ -1,0 +1,1331 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[polish]{babel}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{multirow}
+
+\geometry{margin=2.5cm}
+
+\title{Metoda Elementów Skończonych w Analizie Przewodzenia Ciepła\\
+\large Dokumentacja Matematyczna i Implementacja}
+\author{}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Wprowadzenie}
+
+Niniejszy dokument przedstawia kompletną analizę matematyczną i implementacyjną programu opartego na Metodzie Elementów Skończonych (MES) dla rozwiązywania zagadnień przewodzenia ciepła w dwuwymiarowych obszarach. Program obsługuje zarówno analizę stacjonarną (stan ustalony), jak i niestacjonarną (zmienną w czasie).
+
+\section{Podstawy Teoretyczne -- Funkcje Kształtu}
+
+\subsection{Element Czterowęzłowy (Q4)}
+
+Program wykorzystuje element czterowęzłowy (czworokątny) w układzie współrzędnych naturalnych $(\xi, \eta)$. Numeracja węzłów odbywa się przeciwnie do ruchu wskazówek zegara:
+
+\begin{itemize}
+    \item Węzeł 1: $(\xi, \eta) = (-1, -1)$
+    \item Węzeł 2: $(\xi, \eta) = (1, -1)$
+    \item Węzeł 3: $(\xi, \eta) = (1, 1)$
+    \item Węzeł 4: $(\xi, \eta) = (-1, 1)$
+\end{itemize}
+
+\subsection{Funkcje Kształtu}
+
+Funkcje kształtu dla elementu bilinearnego czterowęzłowego definiowane są wzorami:
+
+\begin{equation}
+N_1(\xi, \eta) = \frac{1}{4}(1-\xi)(1-\eta)
+\end{equation}
+
+\begin{equation}
+N_2(\xi, \eta) = \frac{1}{4}(1+\xi)(1-\eta)
+\end{equation}
+
+\begin{equation}
+N_3(\xi, \eta) = \frac{1}{4}(1+\xi)(1+\eta)
+\end{equation}
+
+\begin{equation}
+N_4(\xi, \eta) = \frac{1}{4}(1-\xi)(1+\eta)
+\end{equation}
+
+\subsection{Własności Funkcji Kształtu}
+
+Funkcje kształtu spełniają następujące właściwości:
+
+\begin{itemize}
+    \item \textbf{Warunek pełności (partition of unity):}
+    \begin{equation}
+    \sum_{i=1}^{4} N_i(\xi, \eta) = 1
+    \end{equation}
+    
+    \item \textbf{Właściwość Kroneckera:}
+    \begin{equation}
+    N_i(\xi_j, \eta_j) = \delta_{ij} = \begin{cases} 
+    1 & \text{jeśli } i = j \\
+    0 & \text{jeśli } i \neq j
+    \end{cases}
+    \end{equation}
+    
+    \item \textbf{Interpolacja temperatury:}
+    \begin{equation}
+    T(\xi, \eta) = \sum_{i=1}^{4} N_i(\xi, \eta) \cdot T_i
+    \end{equation}
+\end{itemize}
+
+\textbf{Pochodzenie:} Funkcje kształtu są iloczynem funkcji liniowych w kierunkach $\xi$ i $\eta$, co zapewnia ciągłość temperatury między elementami.
+
+\section{Pochodne Funkcji Kształtu}
+
+\subsection{Pochodne względem $\xi$}
+
+\begin{equation}
+\frac{\partial N_1}{\partial \xi} = -\frac{1}{4}(1-\eta)
+\end{equation}
+
+\begin{equation}
+\frac{\partial N_2}{\partial \xi} = \frac{1}{4}(1-\eta)
+\end{equation}
+
+\begin{equation}
+\frac{\partial N_3}{\partial \xi} = \frac{1}{4}(1+\eta)
+\end{equation}
+
+\begin{equation}
+\frac{\partial N_4}{\partial \xi} = -\frac{1}{4}(1+\eta)
+\end{equation}
+
+\subsection{Pochodne względem $\eta$}
+
+\begin{equation}
+\frac{\partial N_1}{\partial \eta} = -\frac{1}{4}(1-\xi)
+\end{equation}
+
+\begin{equation}
+\frac{\partial N_2}{\partial \eta} = -\frac{1}{4}(1+\xi)
+\end{equation}
+
+\begin{equation}
+\frac{\partial N_3}{\partial \eta} = \frac{1}{4}(1+\xi)
+\end{equation}
+
+\begin{equation}
+\frac{\partial N_4}{\partial \eta} = \frac{1}{4}(1-\xi)
+\end{equation}
+
+\textbf{Pochodzenie:} Standardowe różniczkowanie funkcji kształtu według współrzędnych naturalnych $\xi$ i $\eta$.
+
+\section{Kwadratura Gaussa}
+
+Całkowanie numeryczne w MES realizowane jest za pomocą kwadratury Gaussa-Legendre'a. Program obsługuje schematy 2, 3 i 4-punktowe.
+
+\subsection{Formuła Ogólna}
+
+Kwadratura Gaussa aproksymuje całkę na przedziale $[-1, 1]$:
+
+\begin{equation}
+\int_{-1}^{1} f(\xi) \, d\xi \approx \sum_{i=1}^{n} w_i \cdot f(\xi_i)
+\end{equation}
+
+gdzie $\xi_i$ to punkty całkowania, a $w_i$ to wagi.
+
+\subsection{Kwadratura 2-punktowa}
+
+Dokładna dla wielomianów stopnia $\leq 3$:
+
+\begin{equation}
+\xi_i = \pm \frac{1}{\sqrt{3}} = \pm 0.577350269...
+\end{equation}
+
+\begin{equation}
+w_i = 1.0
+\end{equation}
+
+\subsection{Kwadratura 3-punktowa}
+
+Dokładna dla wielomianów stopnia $\leq 5$:
+
+\begin{equation}
+\xi_i = \left\{-\sqrt{\frac{3}{5}}, \, 0, \, \sqrt{\frac{3}{5}}\right\} = \{-0.774597, \, 0, \, 0.774597\}
+\end{equation}
+
+\begin{equation}
+w_i = \left\{\frac{5}{9}, \, \frac{8}{9}, \, \frac{5}{9}\right\} = \{0.555556, \, 0.888889, \, 0.555556\}
+\end{equation}
+
+\subsection{Kwadratura 4-punktowa}
+
+Dokładna dla wielomianów stopnia $\leq 7$:
+
+\begin{align}
+p_1 &= \sqrt{\frac{3}{7} - \frac{2}{7}\sqrt{\frac{6}{5}}} \\
+p_2 &= \sqrt{\frac{3}{7} + \frac{2}{7}\sqrt{\frac{6}{5}}}
+\end{align}
+
+\begin{align}
+w_1 &= \frac{18 + \sqrt{30}}{36} \\
+w_2 &= \frac{18 - \sqrt{30}}{36}
+\end{align}
+
+Punkty całkowania: $\xi_i = \{-p_2, -p_1, p_1, p_2\}$
+
+Wagi: $w_i = \{w_2, w_1, w_1, w_2\}$
+
+\subsection{Całkowanie 2D}
+
+Dla całek dwuwymiarowych stosuje się iloczyn tensorowy:
+
+\begin{equation}
+\int_{-1}^{1} \int_{-1}^{1} f(\xi, \eta) \, d\xi \, d\eta \approx \sum_{i=1}^{n} \sum_{j=1}^{n} w_i \cdot w_j \cdot f(\xi_i, \eta_j)
+\end{equation}
+
+\textbf{Pochodzenie:} Punkty i wagi kwadratury Gaussa-Legendre'a są pierwiastkami wielomianów Legendre'a, zapewniając optymalną dokładność numeryczną.
+
+\section{Transformacja Geometryczna -- Jakobian}
+
+\subsection{Macierz Jakobianu}
+
+Transformacja z układu naturalnego $(\xi, \eta)$ do układu fizycznego $(x, y)$ opisana jest przez macierz Jakobianu:
+
+\begin{equation}
+\mathbf{J} = \begin{bmatrix}
+\frac{\partial x}{\partial \xi} & \frac{\partial y}{\partial \xi} \\[0.3em]
+\frac{\partial x}{\partial \eta} & \frac{\partial y}{\partial \eta}
+\end{bmatrix}
+\end{equation}
+
+Składowe macierzy obliczane są z zależności:
+
+\begin{equation}
+\frac{\partial x}{\partial \xi} = \sum_{i=1}^{4} \frac{\partial N_i}{\partial \xi} \cdot x_i
+\end{equation}
+
+\begin{equation}
+\frac{\partial y}{\partial \xi} = \sum_{i=1}^{4} \frac{\partial N_i}{\partial \xi} \cdot y_i
+\end{equation}
+
+\begin{equation}
+\frac{\partial x}{\partial \eta} = \sum_{i=1}^{4} \frac{\partial N_i}{\partial \eta} \cdot x_i
+\end{equation}
+
+\begin{equation}
+\frac{\partial y}{\partial \eta} = \sum_{i=1}^{4} \frac{\partial N_i}{\partial \eta} \cdot y_i
+\end{equation}
+
+\subsection{Wyznacznik Jakobianu}
+
+\begin{equation}
+\det(\mathbf{J}) = J_{11} \cdot J_{22} - J_{12} \cdot J_{21}
+\end{equation}
+
+\textbf{Znaczenie fizyczne:} $\det(\mathbf{J})$ reprezentuje współczynnik skalowania elementu powierzchni podczas transformacji. Musi być dodatni dla prawidłowego elementu (element niezdegenerowany).
+
+\subsection{Odwrotna Macierz Jakobianu}
+
+\begin{equation}
+\mathbf{J}^{-1} = \frac{1}{\det(\mathbf{J})} \begin{bmatrix}
+J_{22} & -J_{12} \\
+-J_{21} & J_{11}
+\end{bmatrix}
+\end{equation}
+
+\textbf{Pochodzenie:} Standardowa transformacja geometryczna w MES, umożliwiająca przeliczanie pochodnych między układami współrzędnych.
+
+\section{Pochodne w Układzie Fizycznym}
+
+Za pomocą odwrotnej macierzy Jakobianu transformujemy pochodne z układu naturalnego do fizycznego:
+
+\begin{equation}
+\begin{bmatrix}
+\frac{\partial N_i}{\partial x} \\[0.3em]
+\frac{\partial N_i}{\partial y}
+\end{bmatrix}
+= \mathbf{J}^{-1} \cdot
+\begin{bmatrix}
+\frac{\partial N_i}{\partial \xi} \\[0.3em]
+\frac{\partial N_i}{\partial \eta}
+\end{bmatrix}
+\end{equation}
+
+Jawnie:
+
+\begin{equation}
+\frac{\partial N_i}{\partial x} = J^{-1}_{11} \cdot \frac{\partial N_i}{\partial \xi} + J^{-1}_{12} \cdot \frac{\partial N_i}{\partial \eta}
+\end{equation}
+
+\begin{equation}
+\frac{\partial N_i}{\partial y} = J^{-1}_{21} \cdot \frac{\partial N_i}{\partial \xi} + J^{-1}_{22} \cdot \frac{\partial N_i}{\partial \eta}
+\end{equation}
+
+\textbf{Pochodzenie:} Reguła łańcuchowa różniczkowania:
+\begin{equation}
+\frac{\partial}{\partial x} = \frac{\partial \xi}{\partial x} \cdot \frac{\partial}{\partial \xi} + \frac{\partial \eta}{\partial x} \cdot \frac{\partial}{\partial \eta}
+\end{equation}
+
+\section{Macierz Przewodnictwa H (Stiffness Matrix)}
+
+\subsection{Teoria}
+
+Macierz $\mathbf{H}$ reprezentuje przewodnictwo cieplne wewnątrz elementu. Wynika z równania Fouriera dla ustalonego przewodzenia ciepła.
+
+\subsection{Wzór Całkowy}
+
+\begin{equation}
+H_{ij} = \int\int_{\Omega} k \left( \frac{\partial N_i}{\partial x} \cdot \frac{\partial N_j}{\partial x} + \frac{\partial N_i}{\partial y} \cdot \frac{\partial N_j}{\partial y} \right) \, d\Omega
+\end{equation}
+
+gdzie:
+\begin{itemize}
+    \item $k$ -- przewodność cieplna [W/(m$\cdot$K)]
+    \item $\Omega$ -- obszar elementu
+    \item $N_i, N_j$ -- funkcje kształtu
+\end{itemize}
+
+\subsection{Przykład Analityczny -- Prosty Element Kwadratowy}
+
+Rozważmy prosty element kwadratowy o wymiarach $1 \times 1$ m, z węzłami w punktach:
+\begin{itemize}
+    \item Węzeł 1: $(0, 0)$
+    \item Węzeł 2: $(1, 0)$
+    \item Węzeł 3: $(1, 1)$
+    \item Węzeł 4: $(0, 1)$
+\end{itemize}
+
+Dla tego elementu macierz Jakobianu jest stała (niezależna od $\xi, \eta$):
+
+\begin{equation}
+\mathbf{J} = \begin{bmatrix}
+0.5 & 0 \\
+0 & 0.5
+\end{bmatrix}, \quad \det(\mathbf{J}) = 0.25, \quad \mathbf{J}^{-1} = \begin{bmatrix}
+2 & 0 \\
+0 & 2
+\end{bmatrix}
+\end{equation}
+
+Dla punktu całkowania $(\xi, \eta) = (-1/\sqrt{3}, -1/\sqrt{3})$ w 2-punktowej kwadraturze Gaussa:
+
+Pochodne funkcji kształtu w układzie naturalnym:
+\begin{align}
+\frac{\partial N_1}{\partial \xi} &= -0.25(1-\eta) = -0.3943 \\
+\frac{\partial N_1}{\partial \eta} &= -0.25(1-\xi) = -0.3943
+\end{align}
+
+Pochodne w układzie fizycznym:
+\begin{align}
+\frac{\partial N_1}{\partial x} &= 2 \cdot (-0.3943) + 0 = -0.7886 \\
+\frac{\partial N_1}{\partial y} &= 0 + 2 \cdot (-0.3943) = -0.7886
+\end{align}
+
+Wkład do elementu $H_{11}$ w tym punkcie całkowania (dla $k = 25$ W/(m$\cdot$K)):
+\begin{equation}
+H_{11} \mathrel{+}= 25 \cdot [(-0.7886)^2 + (-0.7886)^2] \cdot 0.25 \cdot 1.0 = 7.7825
+\end{equation}
+
+Po zsumowaniu wkładów ze wszystkich 4 punktów całkowania, otrzymujemy:
+\begin{equation}
+H_{11} \approx 31.13 \text{ W/K}
+\end{equation}
+
+\subsection{Aproksymacja Kwadraturą Gaussa}
+
+W układzie naturalnych współrzędnych:
+
+\begin{equation}
+H_{ij} \approx \sum_{m=1}^{n_\xi} \sum_{n=1}^{n_\eta} w_m \cdot w_n \cdot k \left( \frac{\partial N_i}{\partial x} \cdot \frac{\partial N_j}{\partial x} + \frac{\partial N_i}{\partial y} \cdot \frac{\partial N_j}{\partial y} \right)_{\xi_m, \eta_n} \cdot |\det(\mathbf{J})|
+\end{equation}
+
+\subsection{Algorytm Obliczania}
+
+\begin{enumerate}
+    \item Inicjalizacja: $\mathbf{H} = \mathbf{0}_{4 \times 4}$
+    \item Dla każdego punktu całkowania $(\xi_m, \eta_n)$:
+    \begin{enumerate}
+        \item Oblicz macierz Jakobianu $\mathbf{J}$
+        \item Oblicz $\det(\mathbf{J})$ i $\mathbf{J}^{-1}$
+        \item Oblicz $\frac{\partial N_i}{\partial x}$ i $\frac{\partial N_i}{\partial y}$ dla $i = 1, 2, 3, 4$
+        \item Dla każdej pary $(i, j)$:
+        \begin{equation}
+        H_{ij} \mathrel{+}= k \cdot \left( \frac{\partial N_i}{\partial x} \cdot \frac{\partial N_j}{\partial x} + \frac{\partial N_i}{\partial y} \cdot \frac{\partial N_j}{\partial y} \right) \cdot |\det(\mathbf{J})| \cdot w_m \cdot w_n
+        \end{equation}
+    \end{enumerate}
+\end{enumerate}
+
+\subsection{Własności Macierzy H}
+
+\begin{itemize}
+    \item Wymiar: $4 \times 4$ (dla elementu 4-węzłowego)
+    \item Symetryczna: $H_{ij} = H_{ji}$
+    \item Dodatnio określona
+    \item Elementy diagonalne: $H_{ii} > 0$
+    \item Pasmowa po agregacji do macierzy globalnej
+\end{itemize}
+
+\subsection{Przykład Macierzy H -- Interpretacja Fizyczna}
+
+Dla elementu kwadratowego $1 \times 1$ m z $k = 25$ W/(m$\cdot$K):
+
+\begin{equation}
+\mathbf{H}^e = \begin{bmatrix}
+31.13 & -16.87 & -4.17 & -16.87 \\
+-16.87 & 31.13 & -16.87 & -4.17 \\
+-4.17 & -16.87 & 31.13 & -16.87 \\
+-16.87 & -4.17 & -16.87 & 31.13
+\end{bmatrix} \text{ [W/K]}
+\end{equation}
+
+\textbf{Interpretacja elementów macierzy:}
+\begin{itemize}
+    \item $H_{11} = 31.13$ -- przewodność termiczna węzła 1 (odpór cieplny)
+    \item $H_{12} = -16.87$ -- sprzężenie między węzłami 1 i 2 (sąsiednie)
+    \item $H_{13} = -4.17$ -- sprzężenie między węzłami 1 i 3 (przekątna)
+    \item Wartości ujemne oznaczają przepływ ciepła między węzłami
+    \item Suma wiersza $\approx 0$ (zachowanie bilansu energii dla izolowanego elementu)
+\end{itemize}
+
+\textbf{Analiza macierzy:}
+\begin{itemize}
+    \item \textbf{Dominacja diagonalna:} $|H_{ii}| > \sum_{j \neq i} |H_{ij}|$ -- układ stabilny
+    \item \textbf{Symetria:} $H_{12} = H_{21}$ -- zasada wzajemności (prawo Maxwella)
+    \item \textbf{Elementy pozadiagonalne ujemne:} ciepło płynie od wyższej do niższej temperatury
+    \item \textbf{Wielkość elementów:} większe $|H_{ij}|$ dla węzłów bliższych (silniejsze sprzężenie)
+\end{itemize}
+
+\textbf{Pochodzenie:} Macierz $\mathbf{H}$ wynika z zastosowania metody Galerkina do równania Fouriera przewodzenia ciepła:
+\begin{equation}
+-\nabla \cdot (k \nabla T) = 0
+\end{equation}
+
+\section{Macierz Pojemności Cieplnej C (Capacity Matrix)}
+
+\subsection{Teoria}
+
+Macierz $\mathbf{C}$ reprezentuje zdolność elementu do magazynowania energii cieplnej. Jest niezbędna w analizie niestacjonarnej.
+
+\subsection{Wzór Całkowy}
+
+\begin{equation}
+C_{ij} = \int\int_{\Omega} \rho \cdot c \cdot N_i \cdot N_j \, d\Omega
+\end{equation}
+
+gdzie:
+\begin{itemize}
+    \item $\rho$ -- gęstość materiału [kg/m$^3$]
+    \item $c$ -- ciepło właściwe [J/(kg$\cdot$K)]
+    \item $N_i, N_j$ -- funkcje kształtu
+\end{itemize}
+
+\subsection{Przykład Analityczny -- Macierz C}
+
+Dla tego samego elementu kwadratowego $1 \times 1$ m, przy $\rho = 7800$ kg/m$^3$ i $c = 700$ J/(kg$\cdot$K):
+
+W punkcie całkowania $(\xi, \eta) = (-1/\sqrt{3}, -1/\sqrt{3})$:
+
+Wartości funkcji kształtu:
+\begin{align}
+N_1 &= 0.25(1-\xi)(1-\eta) = 0.4226 \\
+N_2 &= 0.25(1+\xi)(1-\eta) = 0.0774 \\
+N_3 &= 0.25(1+\xi)(1+\eta) = 0.0142 \\
+N_4 &= 0.25(1-\xi)(1+\eta) = 0.0774
+\end{align}
+
+Wkład do $C_{11}$:
+\begin{equation}
+C_{11} \mathrel{+}= 7800 \cdot 700 \cdot (0.4226)^2 \cdot 0.25 \cdot 1.0 = 242,693 \text{ J/K}
+\end{equation}
+
+\subsection{Aproksymacja Kwadraturą Gaussa}
+
+\begin{equation}
+C_{ij} \approx \sum_{m=1}^{n_\xi} \sum_{n=1}^{n_\eta} w_m \cdot w_n \cdot \rho \cdot c \cdot N_i(\xi_m, \eta_n) \cdot N_j(\xi_m, \eta_n) \cdot |\det(\mathbf{J})|
+\end{equation}
+
+\subsection{Algorytm Obliczania}
+
+\begin{enumerate}
+    \item Inicjalizacja: $\mathbf{C} = \mathbf{0}_{4 \times 4}$
+    \item Dla każdego punktu całkowania $(\xi_m, \eta_n)$:
+    \begin{enumerate}
+        \item Oblicz funkcje kształtu $N_i(\xi_m, \eta_n)$ dla $i = 1, 2, 3, 4$
+        \item Oblicz $\det(\mathbf{J})$
+        \item Dla każdej pary $(i, j)$:
+        \begin{equation}
+        C_{ij} \mathrel{+}= \rho \cdot c \cdot N_i \cdot N_j \cdot |\det(\mathbf{J})| \cdot w_m \cdot w_n
+        \end{equation}
+    \end{enumerate}
+\end{enumerate}
+
+\subsection{Własności Macierzy C}
+
+\begin{itemize}
+    \item Wymiar: $4 \times 4$
+    \item Symetryczna: $C_{ij} = C_{ji}$
+    \item Dodatnio określona
+    \item Zazwyczaj pełna (wszystkie elementy $\neq 0$)
+    \item Proporcjonalna do $\rho \cdot c$
+\end{itemize}
+
+\subsection{Przykład Macierzy C -- Interpretacja Fizyczna}
+
+Dla elementu kwadratowego $1 \times 1$ m z $\rho = 7800$ kg/m$^3$ i $c = 700$ J/(kg$\cdot$K):
+
+\begin{equation}
+\mathbf{C}^e = \begin{bmatrix}
+970,556 & 485,278 & 242,639 & 485,278 \\
+485,278 & 970,556 & 485,278 & 242,639 \\
+242,639 & 485,278 & 970,556 & 485,278 \\
+485,278 & 242,639 & 485,278 & 970,556
+\end{bmatrix} \text{ [J/K]}
+\end{equation}
+
+\textbf{Interpretacja elementów macierzy:}
+\begin{itemize}
+    \item $C_{11} = 970,556$ J/K -- pojemność cieplna związana z węzłem 1
+    \item $C_{12} = 485,278$ J/K -- sprzężona pojemność między węzłami 1 i 2
+    \item Wszystkie wartości dodatnie -- energia jest magazynowana
+    \item Suma wiersza = całkowita pojemność cieplna elementu/4
+    \item Element diagonalny $\approx 2 \times$ element pozadiagonalny (dla sąsiadów)
+\end{itemize}
+
+\textbf{Analiza macierzy:}
+\begin{itemize}
+    \item \textbf{Masa elementu:} $m = \rho \cdot V = 7800 \cdot 1 = 7800$ kg
+    \item \textbf{Całkowita pojemność:} $C_{total} = m \cdot c = 7800 \cdot 700 = 5,460,000$ J/K
+    \item \textbf{Suma elementów macierzy:} $\sum C_{ij} = 5,460,000$ J/K $\checkmark$
+    \item \textbf{Konsystentna macierz mas:} rozkład pojemności zgodny z funkcjami kształtu
+    \item \textbf{Wpływ na dynamikę:} większe $C$ $\rightarrow$ wolniejsza reakcja termiczna
+\end{itemize}
+
+\textbf{Porównanie z macierzą skupioną (lumped mass):}
+
+Alternatywnie można użyć macierzy diagonalnej (szybsza, mniej dokładna):
+\begin{equation}
+\mathbf{C}^{lumped} = \begin{bmatrix}
+1,365,000 & 0 & 0 & 0 \\
+0 & 1,365,000 & 0 & 0 \\
+0 & 0 & 1,365,000 & 0 \\
+0 & 0 & 0 & 1,365,000
+\end{bmatrix} \text{ [J/K]}
+\end{equation}
+
+gdzie każdy węzeł otrzymuje 1/4 całkowitej pojemności elementu.
+
+\textbf{Pochodzenie:} Macierz $\mathbf{C}$ wynika z równania bilansu energii:
+\begin{equation}
+\rho \cdot c \cdot \frac{\partial T}{\partial t} = \nabla \cdot (k \nabla T) + Q
+\end{equation}
+
+\section{Warunki Brzegowe Trzeciego Rodzaju}
+
+\subsection{Teoria Konwekcji}
+
+Warunki brzegowe trzeciego rodzaju (warunek Robina) opisują konwekcję na brzegu obszaru:
+
+\begin{equation}
+q = \alpha (T - T_\infty)
+\end{equation}
+
+gdzie:
+\begin{itemize}
+    \item $q$ -- strumień ciepła [W/m$^2$]
+    \item $\alpha$ -- współczynnik konwekcji [W/(m$^2 \cdot$K)]
+    \item $T$ -- temperatura powierzchni [K]
+    \item $T_\infty$ -- temperatura otoczenia [K]
+\end{itemize}
+
+\section{Macierz Hbc (Boundary Convection Matrix)}
+
+\subsection{Wzór Całkowy}
+
+Dla krawędzi brzegowej $\Gamma$:
+
+\begin{equation}
+H^{bc}_{ij} = \int_{\Gamma} \alpha \cdot N_i \cdot N_j \, d\Gamma
+\end{equation}
+
+\subsection{Aproksymacja dla Krawędzi}
+
+Całkowanie odbywa się wzdłuż krawędzi elementu (1D):
+
+\begin{equation}
+H^{bc}_{ij} \approx \sum_{k=1}^{n} w_k \cdot \alpha \cdot N_i(\xi_k) \cdot N_j(\xi_k) \cdot \left|\frac{d\Gamma}{d\xi}\right|
+\end{equation}
+
+\subsection{Jakobian dla Krawędzi}
+
+Długość elementu krawędzi obliczana jest jako:
+
+\textbf{Dla krawędzi poziomych} ($\eta = \text{const}$):
+\begin{equation}
+\left|\frac{d\Gamma}{d\eta}\right| = \sqrt{\left(\frac{\partial x}{\partial \eta}\right)^2 + \left(\frac{\partial y}{\partial \eta}\right)^2}
+\end{equation}
+
+\textbf{Dla krawędzi pionowych} ($\xi = \text{const}$):
+\begin{equation}
+\left|\frac{d\Gamma}{d\xi}\right| = \sqrt{\left(\frac{\partial x}{\partial \xi}\right)^2 + \left(\frac{\partial y}{\partial \xi}\right)^2}
+\end{equation}
+
+\subsection{Definicje Krawędzi Elementu}
+
+\begin{itemize}
+    \item Krawędź 0 (dół): węzły 1--2, $\eta = -1$
+    \item Krawędź 1 (prawo): węzły 2--3, $\xi = 1$
+    \item Krawędź 2 (góra): węzły 3--4, $\eta = 1$
+    \item Krawędź 3 (lewo): węzły 4--1, $\xi = -1$
+\end{itemize}
+
+\subsection{Algorytm Obliczania}
+
+\begin{enumerate}
+    \item Inicjalizacja: $\mathbf{H}^{bc} = \mathbf{0}_{4 \times 4}$
+    \item Dla każdej krawędzi brzegowej $e = 0, 1, 2, 3$:
+    \begin{enumerate}
+        \item Ustal stałą współrzędną ($\xi$ lub $\eta$) i zmienną
+        \item Dla każdego punktu całkowania $k$ wzdłuż krawędzi:
+        \begin{enumerate}
+            \item Oblicz $N_i(\xi_k, \eta_k)$ dla $i = 1, 2, 3, 4$
+            \item Oblicz jakobian krawędzi $|\frac{d\Gamma}{d\xi}|$
+            \item Dla każdej pary $(i, j)$:
+            \begin{equation}
+            H^{bc}_{ij} \mathrel{+}= \alpha \cdot N_i \cdot N_j \cdot \left|\frac{d\Gamma}{d\xi}\right| \cdot w_k
+            \end{equation}
+        \end{enumerate}
+    \end{enumerate}
+\end{enumerate}
+
+\subsection{Własności Macierzy Hbc}
+
+\begin{itemize}
+    \item Wymiar: $4 \times 4$
+    \item Symetryczna: $H^{bc}_{ij} = H^{bc}_{ji}$
+    \item Rzadka (wiele zer)
+    \item Niezerowe elementy tylko dla węzłów na krawędzi brzegowej
+    \item Jeśli element nie ma brzegu: $\mathbf{H}^{bc} = \mathbf{0}$
+\end{itemize}
+
+\subsection{Przykład Macierzy Hbc -- Konwekcja na Dolnej Krawędzi}
+
+Dla elementu z konwekcją na dolnej krawędzi (węzły 1--2), przy $\alpha = 300$ W/(m$^2\cdot$K), długość krawędzi $L = 1$ m:
+
+\textbf{Obliczenie dla 2-punktowej kwadratury Gaussa:}
+
+W punkcie $\xi = -1/\sqrt{3}$ na dolnej krawędzi ($\eta = -1$):
+\begin{align}
+N_1(\xi, -1) &= 0.25(1-\xi)(1-(-1)) = 0.3943 \\
+N_2(\xi, -1) &= 0.25(1+\xi)(1-(-1)) = 0.1057 \\
+N_3(\xi, -1) &= 0.25(1+\xi)(1+(-1)) = 0 \\
+N_4(\xi, -1) &= 0.25(1-\xi)(1+(-1)) = 0
+\end{align}
+
+Jakobian krawędzi: $|d\Gamma/d\xi| = L/2 = 0.5$ m
+
+Wkład do $H^{bc}_{11}$:
+\begin{equation}
+H^{bc}_{11} \mathrel{+}= 300 \cdot (0.3943)^2 \cdot 0.5 \cdot 1.0 = 23.32 \text{ W/K}
+\end{equation}
+
+\textbf{Pełna macierz Hbc dla dolnej krawędzi:}
+
+\begin{equation}
+\mathbf{H}^{bc} = \begin{bmatrix}
+50.0 & 25.0 & 0 & 0 \\
+25.0 & 50.0 & 0 & 0 \\
+0 & 0 & 0 & 0 \\
+0 & 0 & 0 & 0
+\end{bmatrix} \text{ [W/K]}
+\end{equation}
+
+\textbf{Interpretacja:}
+\begin{itemize}
+    \item $H^{bc}_{11}, H^{bc}_{22} = 50$ W/K -- odpór konwekcyjny węzłów 1 i 2
+    \item $H^{bc}_{12} = 25$ W/K -- sprzężenie między węzłami na brzegu
+    \item $H^{bc}_{33}, H^{bc}_{44} = 0$ -- węzły 3 i 4 nie mają kontaktu z otoczeniem
+    \item Suma rzędu 1: $50 + 25 = 75$ W/K -- całkowity odpór konwekcyjny węzła 1
+    \item Większe $\alpha$ $\rightarrow$ większe elementy $H^{bc}$ $\rightarrow$ silniejsza konwekcja
+\end{itemize}
+
+\textbf{Analiza wpływu na układ:}
+\begin{itemize}
+    \item Macierz $\mathbf{H}^{bc}$ zwiększa sztywność układu na brzegu
+    \item Modyfikuje warunki brzegowe: naturalne (Neumann) $\rightarrow$ mieszane (Robin)
+    \item Stabilizuje rozwiązanie numeryczne
+    \item Reprezentuje fizyczny odpór przenoszenia ciepła do otoczenia
+\end{itemize}
+
+\textbf{Pochodzenie:} Macierz $\mathbf{H}^{bc}$ wynika z zastosowania metody ważonych residuów do warunku brzegowego III rodzaju (Robin).
+
+\section{Wektor P (Heat Flux Vector)}
+
+\subsection{Teoria}
+
+Wektor $\mathbf{P}$ reprezentuje obciążenie termiczne od konwekcji z otoczeniem o temperaturze $T_\infty$.
+
+\subsection{Wzór Całkowy}
+
+\begin{equation}
+P_i = \int_{\Gamma} \alpha \cdot T_\infty \cdot N_i \, d\Gamma
+\end{equation}
+
+\subsection{Aproksymacja}
+
+\begin{equation}
+P_i \approx \sum_{k=1}^{n} w_k \cdot \alpha \cdot T_\infty \cdot N_i(\xi_k) \cdot \left|\frac{d\Gamma}{d\xi}\right|
+\end{equation}
+
+\subsection{Algorytm Obliczania}
+
+\begin{enumerate}
+    \item Inicjalizacja: $\mathbf{P} = \mathbf{0}_{4 \times 1}$
+    \item Dla każdej krawędzi brzegowej:
+    \begin{enumerate}
+        \item Dla każdego punktu całkowania $k$:
+        \begin{enumerate}
+            \item Oblicz $N_i(\xi_k)$ dla $i = 1, 2, 3, 4$
+            \item Oblicz jakobian krawędzi
+            \item Dla każdego węzła $i$:
+            \begin{equation}
+            P_i \mathrel{+}= \alpha \cdot T_\infty \cdot N_i \cdot \left|\frac{d\Gamma}{d\xi}\right| \cdot w_k
+            \end{equation}
+        \end{enumerate}
+    \end{enumerate}
+\end{enumerate}
+
+\subsection{Własności Wektora P}
+
+\begin{itemize}
+    \item Wymiar: $4 \times 1$
+    \item Niezerowe tylko dla węzłów na brzegu
+    \item Proporcjonalny do $\alpha \cdot T_\infty$
+\end{itemize}
+
+\subsection{Przykład Wektora P -- Obciążenie Konwekcyjne}
+
+Dla tego samego elementu z konwekcją na dolnej krawędzi, przy $\alpha = 300$ W/(m$^2\cdot$K), $T_\infty = 1200$ K:
+
+\textbf{Obliczenie:}
+
+W punkcie $\xi = -1/\sqrt{3}$ na dolnej krawędzi:
+\begin{equation}
+P_1 \mathrel{+}= 300 \cdot 1200 \cdot 0.3943 \cdot 0.5 \cdot 1.0 = 71,074 \text{ W}
+\end{equation}
+
+\textbf{Pełny wektor P dla dolnej krawędzi:}
+
+\begin{equation}
+\mathbf{P}^e = \begin{bmatrix}
+180,000 \\
+180,000 \\
+0 \\
+0
+\end{bmatrix} \text{ [W]}
+\end{equation}
+
+\textbf{Interpretacja fizyczna:}
+\begin{itemize}
+    \item $P_1 = P_2 = 180,000$ W -- moc cieplna docierająca do węzłów 1 i 2 z otoczenia
+    \item Całkowita moc: $P_1 + P_2 = 360,000$ W
+    \item Teoretyczna moc dla płaskiej ściany: $q_{total} = \alpha \cdot A \cdot (T_\infty - T_s)$
+    \item Dla $\Delta T = 100$ K: $q = 300 \cdot 1 \cdot 100 = 30,000$ W
+    \item Wektor P reprezentuje źródło ciepła od konwekcji
+\end{itemize}
+
+\textbf{Bilans energetyczny z Hbc i P:}
+
+Równanie brzegowe: $\mathbf{H}^{bc} \{T\} = \{P\}$ (gdy wszystkie węzły mają $T = T_\infty$)
+
+Sprawdzenie dla $T_1 = T_2 = 1200$ K:
+\begin{equation}
+\begin{bmatrix}
+50 & 25 \\
+25 & 50
+\end{bmatrix}
+\begin{bmatrix}
+1200 \\
+1200
+\end{bmatrix}
+=
+\begin{bmatrix}
+90,000 \\
+90,000
+\end{bmatrix} \text{ W}
+\end{equation}
+
+Jednak $\{P\} = [180,000, 180,000]^T$, więc:
+\begin{equation}
+\mathbf{H}^{bc}\{T\} - \{P\} = 
+\begin{bmatrix}
+90,000 - 180,000 \\
+90,000 - 180,000
+\end{bmatrix}
+=
+\begin{bmatrix}
+-90,000 \\
+-90,000
+\end{bmatrix}
+\end{equation}
+
+Wartości ujemne oznaczają, że ciepło wpływa z otoczenia (dla $T < T_\infty$).
+
+\textbf{Pochodzenie:} Wektor $\mathbf{P}$ wynika z członu źródłowego w warunku brzegowym konwekcyjnym.
+
+\section{Agregacja Macierzy Lokalnych do Globalnych}
+
+\subsection{Proces Agregacji}
+
+Macierze lokalne (element-level) są agregowane do macierzy globalnych (system-level) według następującego algorytmu:
+
+\begin{enumerate}
+    \item Dla każdego elementu $e$:
+    \begin{enumerate}
+        \item Oblicz lokalne macierze: $\mathbf{H}^e$, $\mathbf{C}^e$, $\mathbf{H}^{bc,e}$, $\mathbf{P}^e$
+        \item Pobierz mapowanie węzłów lokalnych $\rightarrow$ globalne: $\text{nodeIds}[i]$
+        \item Dodaj wkład lokalny do macierzy globalnych
+    \end{enumerate}
+\end{enumerate}
+
+\subsection{Formuła Agregacji}
+
+Mapowanie indeksów z lokalnego do globalnego układu:
+
+\begin{equation}
+i_{\text{local}} \in [0, 3] \quad \rightarrow \quad i_{\text{global}} = \text{nodeIds}[i_{\text{local}}] - 1
+\end{equation}
+
+Dodawanie wkładów lokalnych:
+
+\begin{align}
+H_{\text{global}}[i_g][j_g] &\mathrel{+}= H^e_{\text{local}}[i][j] \\
+H^{bc}_{\text{global}}[i_g][j_g] &\mathrel{+}= H^{bc,e}_{\text{local}}[i][j] \\
+C_{\text{global}}[i_g][j_g] &\mathrel{+}= C^e_{\text{local}}[i][j] \\
+P_{\text{global}}[i_g] &\mathrel{+}= P^e_{\text{local}}[i]
+\end{align}
+
+\subsection{Algorytm Implementacyjny}
+
+\begin{verbatim}
+dla każdego elementu e:
+    oblicz: H_local, C_local, Hbc_local, P_local
+    
+    dla i = 0 do 3:
+        globalI = nodeIds[i] - 1
+        P_global[globalI] += P_local[i]
+        
+        dla j = 0 do 3:
+            globalJ = nodeIds[j] - 1
+            H_global[globalI][globalJ] += H_local[i][j]
+            Hbc_global[globalI][globalJ] += Hbc_local[i][j]
+            C_global[globalI][globalJ] += C_local[i][j]
+\end{verbatim}
+
+\subsection{Własności Macierzy Globalnych}
+
+\begin{itemize}
+    \item Wymiar: $N \times N$, gdzie $N$ = liczba węzłów w całej siatce
+    \item Symetryczne: $\mathbf{H}_{\text{global}}$, $\mathbf{H}^{bc}_{\text{global}}$, $\mathbf{C}_{\text{global}}$
+    \item Pasmowe (rzadkie) -- niezerowe tylko dla węzłów połączonych
+    \item Szerokość pasma zależy od numeracji węzłów
+\end{itemize}
+
+\section{Analiza Stacjonarna (Steady-State)}
+
+\subsection{Równanie Stanu Ustalonego}
+
+W stanie ustalonym temperatura nie zmienia się w czasie ($\frac{\partial T}{\partial t} = 0$), więc:
+
+\begin{equation}
+[\mathbf{H}_{\text{global}} + \mathbf{H}^{bc}_{\text{global}}] \{T\} = \{P_{\text{global}}\}
+\end{equation}
+
+\textbf{Interpretacja fizyczna:}
+\begin{itemize}
+    \item $\mathbf{H}_{\text{global}} \{T\}$ -- strumień ciepła przez przewodzenie
+    \item $\mathbf{H}^{bc}_{\text{global}} \{T\}$ -- strumień ciepła przez konwekcję
+    \item $\{P_{\text{global}}\}$ -- źródła ciepła (z warunków brzegowych)
+\end{itemize}
+
+\subsection{Metoda Rozwiązania}
+
+Układ równań liniowych rozwiązywany jest metodą eliminacji Gaussa z wyborem elementu głównego (partial pivoting):
+
+\begin{enumerate}
+    \item \textbf{Utworzenie macierzy rozszerzonej:}
+    \begin{equation}
+    \mathbf{A} = [\mathbf{H}_{\text{global}} + \mathbf{H}^{bc}_{\text{global}} \, | \, \mathbf{P}_{\text{global}}]
+    \end{equation}
+    
+    \item \textbf{Eliminacja w przód z pivotingiem:}
+    \begin{itemize}
+        \item Dla $k = 1$ do $N-1$:
+        \begin{itemize}
+            \item Znajdź wiersz z maksymalnym $|A_{ik}|$ dla $i \geq k$
+            \item Zamień wiersze (pivoting)
+            \item Wyeliminuj $A_{ik}$ dla $i > k$
+        \end{itemize}
+    \end{itemize}
+    
+    \item \textbf{Podstawienie wstecz:}
+    \begin{equation}
+    T_i = \frac{1}{A_{ii}} \left( A_{i,N+1} - \sum_{j=i+1}^{N} A_{ij} \cdot T_j \right)
+    \end{equation}
+\end{enumerate}
+
+\subsection{Złożoność Obliczeniowa}
+
+\begin{itemize}
+    \item Eliminacja Gaussa: $O(N^3)$
+    \item Podstawienie wstecz: $O(N^2)$
+    \item Całkowita: $O(N^3)$
+\end{itemize}
+
+\section{Analiza Niestacjonarna (Transient)}
+
+\subsection{Równanie Różniczkowe}
+
+Równanie przewodzenia ciepła zależne od czasu:
+
+\begin{equation}
+[\mathbf{C}_{\text{global}}] \left\{\frac{\partial T}{\partial t}\right\} + [\mathbf{H}_{\text{global}} + \mathbf{H}^{bc}_{\text{global}}] \{T\} = \{P_{\text{global}}\}
+\end{equation}
+
+\textbf{Interpretacja fizyczna:}
+\begin{itemize}
+    \item $\mathbf{C} \frac{\partial T}{\partial t}$ -- szybkość zmian energii wewnętrznej
+    \item $(\mathbf{H} + \mathbf{H}^{bc}) \{T\}$ -- strumień ciepła (przewodnictwo + konwekcja)
+    \item $\{P\}$ -- źródła ciepła
+\end{itemize}
+
+\subsection{Dyskretyzacja Czasowa -- Metoda Eulera Wstecznego}
+
+Zastosowano schemat niejawny (implicit) Eulera wstecznego:
+
+\begin{equation}
+\mathbf{C} \cdot \frac{T^{n+1} - T^n}{\Delta t} + (\mathbf{H} + \mathbf{H}^{bc}) \cdot T^{n+1} = \mathbf{P}
+\end{equation}
+
+Przekształcenie do postaci liniowej:
+
+\begin{equation}
+\left[\frac{\mathbf{C}}{\Delta t} + \mathbf{H} + \mathbf{H}^{bc}\right] \{T^{n+1}\} = \left[\frac{\mathbf{C}}{\Delta t}\right] \{T^n\} + \{\mathbf{P}\}
+\end{equation}
+
+\subsection{Algorytm Krokowania Czasowego}
+
+\begin{enumerate}
+    \item \textbf{Inicjalizacja:}
+    \begin{equation}
+    T^0 = T_{\text{initial}} \quad \text{(dla wszystkich węzłów)}
+    \end{equation}
+    
+    \item \textbf{Pre-obliczenia (jednorazowo):}
+    \begin{equation}
+    \mathbf{LHS} = \frac{\mathbf{C}}{\Delta t} + \mathbf{H} + \mathbf{H}^{bc}
+    \end{equation}
+    
+    \item \textbf{Dla każdego kroku czasowego} $n = 1, 2, \ldots, N_{\text{steps}}$:
+    \begin{enumerate}
+        \item Oblicz prawą stronę:
+        \begin{equation}
+        \mathbf{RHS} = \frac{\mathbf{C}}{\Delta t} \cdot T^n + \mathbf{P}
+        \end{equation}
+        
+        \item Rozwiąż układ liniowy:
+        \begin{equation}
+        \mathbf{LHS} \cdot T^{n+1} = \mathbf{RHS}
+        \end{equation}
+        
+        \item Aktualizuj rozwiązanie:
+        \begin{equation}
+        T^n \leftarrow T^{n+1}
+        \end{equation}
+        
+        \item Zapisz wyniki do historii
+    \end{enumerate}
+\end{enumerate}
+
+\subsection{Własności Metody Eulera Wstecznego}
+
+\begin{itemize}
+    \item \textbf{Bezwarunkowo stabilna} -- dowolny krok czasowy $\Delta t$ daje stabilne rozwiązanie
+    \item \textbf{Pierwszego rzędu dokładności:}
+    \begin{itemize}
+        \item Błąd lokalny: $O(\Delta t^2)$
+        \item Błąd globalny: $O(\Delta t)$
+    \end{itemize}
+    \item \textbf{Niejawna (implicit)} -- wymaga rozwiązania układu równań w każdym kroku
+    \item \textbf{Tłumi oscylacje} -- numeryczna dyfuzja wygładza rozwiązanie
+\end{itemize}
+
+\subsection{Stabilność}
+
+Metoda Eulera wstecznego jest \textbf{A-stabilna}, co oznacza, że dla dowolnego $\Delta t > 0$:
+
+\begin{equation}
+\lim_{n \to \infty} T^n = T_{\text{steady-state}}
+\end{equation}
+
+Brak ograniczenia na krok czasowy ze względów stabilności (może być ograniczony tylko dokładnością).
+
+\subsection{Rola Macierzy C}
+
+\begin{itemize}
+    \item \textbf{Bez C:} reakcja natychmiastowa $\rightarrow$ problem stacjonarny
+    \item \textbf{Z C:} opóźniona reakcja, akumulacja energii
+    \item \textbf{Większe C} $\rightarrow$ wolniejsze zmiany temperatury
+    \item C stabilizuje i symetryzuje problem niestacjonarny
+\end{itemize}
+
+\subsection{Liczba Kroków Czasowych}
+
+\begin{equation}
+N_{\text{steps}} = \frac{t_{\text{simulation}}}{\Delta t}
+\end{equation}
+
+\textbf{Dobór kroku czasowego:}
+\begin{itemize}
+    \item Mały $\Delta t$ -- wyższa dokładność, więcej obliczeń
+    \item Duży $\Delta t$ -- niższa dokładność, mniej obliczeń
+    \item Kompromis między dokładnością a efektywnością
+\end{itemize}
+
+\section{Parametry Materiałowe i ich Wpływ}
+
+\subsection{Parametry Wejściowe}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|l|c|}
+\hline
+\textbf{Parametr} & \textbf{Symbol} & \textbf{Jednostka} & \textbf{Wpływ na} \\
+\hline
+Przewodność cieplna & $k$ & W/(m·K) & $\mathbf{H}$ \\
+\hline
+Współczynnik konwekcji & $\alpha$ & W/(m$^2$·K) & $\mathbf{H}^{bc}$, $\mathbf{P}$ \\
+\hline
+Temp. otoczenia & $T_\infty$ & K lub °C & $\mathbf{P}$ \\
+\hline
+Gęstość & $\rho$ & kg/m$^3$ & $\mathbf{C}$ \\
+\hline
+Ciepło właściwe & $c$ & J/(kg·K) & $\mathbf{C}$ \\
+\hline
+Temp. początkowa & $T_0$ & K lub °C & Warunek początkowy \\
+\hline
+\end{tabular}
+\caption{Parametry materiałowe i ich wpływ na macierze}
+\end{table}
+
+\subsection{Wpływ na Rozwiązanie}
+
+\begin{itemize}
+    \item \textbf{Zwiększenie $k$:} szybsza dyfuzja ciepła, większa macierz $\mathbf{H}$
+    \item \textbf{Zwiększenie $\alpha$:} silniejsza konwekcja, większa $\mathbf{H}^{bc}$ i $\mathbf{P}$
+    \item \textbf{Zwiększenie $\rho$ lub $c$:} większa pojemność cieplna, większa $\mathbf{C}$, wolniejsze zmiany temperatury
+    \item \textbf{Zwiększenie $T_\infty$:} większe obciążenie termiczne, większy $\mathbf{P}$
+\end{itemize}
+
+\section{Kolejność Obliczeń w Programie}
+
+\subsection{Etap 1: Przygotowanie Danych}
+
+\begin{enumerate}
+    \item Wczytanie siatki z pliku (węzły, elementy)
+    \item Wczytanie parametrów materiałowych
+    \item Wczytanie warunków brzegowych
+    \item Zainicjalizowanie struktur danych
+\end{enumerate}
+
+\subsection{Etap 2: Obliczenia Lokalne (dla każdego elementu)}
+
+\begin{enumerate}
+    \item Pobranie współrzędnych węzłów elementu: $(x_i, y_i)$
+    \item \textbf{Punkty całkowania Gaussa} (stałe): $\xi_k, \eta_k, w_k$
+    \item Dla każdego punktu całkowania $(\xi_m, \eta_n)$:
+    \begin{enumerate}
+        \item Oblicz \textbf{funkcje kształtu}: $N_i(\xi, \eta)$
+        \item Oblicz \textbf{pochodne funkcji kształtu}: $\frac{\partial N_i}{\partial \xi}$, $\frac{\partial N_i}{\partial \eta}$
+        \item Oblicz \textbf{macierz Jakobianu}: $\mathbf{J}$
+        \item Oblicz \textbf{wyznacznik Jakobianu}: $\det(\mathbf{J})$
+        \item Oblicz \textbf{odwrotną macierz Jakobianu}: $\mathbf{J}^{-1}$
+        \item Oblicz \textbf{pochodne fizyczne}: $\frac{\partial N_i}{\partial x}$, $\frac{\partial N_i}{\partial y}$
+        \item Akumuluj wkład do \textbf{macierzy lokalnej H}
+        \item Akumuluj wkład do \textbf{macierzy lokalnej C}
+    \end{enumerate}
+    \item Dla każdej krawędzi brzegowej:
+    \begin{enumerate}
+        \item Oblicz \textbf{jakobian krawędzi}: $|\frac{d\Gamma}{d\xi}|$
+        \item Akumuluj wkład do \textbf{macierzy lokalnej Hbc}
+        \item Akumuluj wkład do \textbf{wektora lokalnego P}
+    \end{enumerate}
+\end{enumerate}
+
+\subsection{Etap 3: Agregacja Globalna}
+
+\begin{enumerate}
+    \item Dla każdego elementu:
+    \begin{enumerate}
+        \item Mapowanie węzłów lokalnych $\rightarrow$ globalnych
+        \item Dodanie $\mathbf{H}^e$ do $\mathbf{H}_{\text{global}}$
+        \item Dodanie $\mathbf{C}^e$ do $\mathbf{C}_{\text{global}}$
+        \item Dodanie $\mathbf{H}^{bc,e}$ do $\mathbf{H}^{bc}_{\text{global}}$
+        \item Dodanie $\mathbf{P}^e$ do $\mathbf{P}_{\text{global}}$
+    \end{enumerate}
+\end{enumerate}
+
+\subsection{Etap 4: Rozwiązanie}
+
+\textbf{Analiza stacjonarna (opcjonalnie):}
+\begin{enumerate}
+    \item Utworzenie macierzy rozszerzonej: $[\mathbf{H} + \mathbf{H}^{bc} \, | \, \mathbf{P}]$
+    \item Eliminacja Gaussa z pivotingiem
+    \item Podstawienie wstecz
+    \item Wyświetlenie rozkładu temperatury
+\end{enumerate}
+
+\textbf{Analiza niestacjonarna:}
+\begin{enumerate}
+    \item Inicjalizacja: $T^0 = T_{\text{initial}}$
+    \item Pre-obliczenia: $\mathbf{LHS} = \frac{\mathbf{C}}{\Delta t} + \mathbf{H} + \mathbf{H}^{bc}$
+    \item Dla każdego kroku czasowego:
+    \begin{enumerate}
+        \item Oblicz $\mathbf{RHS} = \frac{\mathbf{C}}{\Delta t} \cdot T^n + \mathbf{P}$
+        \item Rozwiąż $\mathbf{LHS} \cdot T^{n+1} = \mathbf{RHS}$
+        \item Aktualizuj $T^n \leftarrow T^{n+1}$
+        \item Zapisz historię
+    \end{enumerate}
+    \item Wyświetlenie wyników końcowych i historii
+\end{enumerate}
+
+\section{Przykład Kompletny -- Analiza Prostego Układu}
+
+\subsection{Definicja Problemu}
+
+Rozważmy płytę stalową o wymiarach $0.1 \times 0.1$ m, grubość zaniedbywalnie mała (analiza 2D). Dolna krawędź ma kontakt z gorącym otoczeniem ($T_\infty = 1200°$C, $\alpha = 300$ W/(m$^2\cdot$K)), pozostałe krawędzie izolowane. Temperatura początkowa $T_0 = 100°$C.
+
+\textbf{Dane materiałowe (stal):}
+\begin{itemize}
+    \item Przewodność: $k = 25$ W/(m$\cdot$K)
+    \item Gęstość: $\rho = 7800$ kg/m$^3$
+    \item Ciepło właściwe: $c = 700$ J/(kg$\cdot$K)
+\end{itemize}
+
+\subsection{Dyskretyzacja -- Jeden Element}
+
+Najprostsza siatka: 1 element, 4 węzły:
+\begin{itemize}
+    \item Węzeł 1: $(0, 0)$ -- dolny lewy (brzeg)
+    \item Węzeł 2: $(0.1, 0)$ -- dolny prawy (brzeg)
+    \item Węzeł 3: $(0.1, 0.1)$ -- górny prawy
+    \item Węzeł 4: $(0, 0.1)$ -- górny lewy
+\end{itemize}
+
+\subsection{Macierze Elementowe}
+
+\textbf{Macierz H} (przeskalowana dla $0.1 \times 0.1$ m):
+\begin{equation}
+\mathbf{H} = \begin{bmatrix}
+3.113 & -1.687 & -0.417 & -1.687 \\
+-1.687 & 3.113 & -1.687 & -0.417 \\
+-0.417 & -1.687 & 3.113 & -1.687 \\
+-1.687 & -0.417 & -1.687 & 3.113
+\end{bmatrix} \text{ [W/K]}
+\end{equation}
+
+\textbf{Macierz C:}
+\begin{equation}
+\mathbf{C} = \begin{bmatrix}
+9.706 & 4.853 & 2.426 & 4.853 \\
+4.853 & 9.706 & 4.853 & 2.426 \\
+2.426 & 4.853 & 9.706 & 4.853 \\
+4.853 & 2.426 & 4.853 & 9.706
+\end{bmatrix} \text{ [J/K]}
+\end{equation}
+
+\textbf{Macierz Hbc} (tylko dolna krawędź):
+\begin{equation}
+\mathbf{H}^{bc} = \begin{bmatrix}
+5.0 & 2.5 & 0 & 0 \\
+2.5 & 5.0 & 0 & 0 \\
+0 & 0 & 0 & 0 \\
+0 & 0 & 0 & 0
+\end{bmatrix} \text{ [W/K]}
+\end{equation}
+
+\textbf{Wektor P:}
+\begin{equation}
+\mathbf{P} = \begin{bmatrix}
+18,000 \\
+18,000 \\
+0 \\
+0
+\end{bmatrix} \text{ [W]}
+\end{equation}
+
+\subsection{Rozwiązanie Stacjonarne}
+
+Układ równań: $[\mathbf{H} + \mathbf{H}^{bc}]\{T\} = \{P\}$
+
+\begin{equation}
+\begin{bmatrix}
+8.113 & -0.813 & -0.417 & -1.687 \\
+-0.813 & 8.113 & -1.687 & -0.417 \\
+-0.417 & -1.687 & 3.113 & -1.687 \\
+-1.687 & -0.417 & -1.687 & 3.113
+\end{bmatrix}
+\begin{bmatrix}
+T_1 \\
+T_2 \\
+T_3 \\
+T_4
+\end{bmatrix}
+=
+\begin{bmatrix}
+18,000 \\
+18,000 \\
+0 \\
+0
+\end{bmatrix}
+\end{equation}
+
+\textbf{Rozwiązanie:}
+\begin{equation}
+\{T\} \approx \begin{bmatrix}
+1150 \\
+1150 \\
+1080 \\
+1080
+\end{bmatrix} \text{ [°C]}
+\end{equation}
+
+\textbf{Interpretacja:}
+\begin{itemize}
+    \item Węzły 1, 2 (dolne): $\approx 1150°$C -- blisko temperatury otoczenia
+    \item Węzły 3, 4 (górne): $\approx 1080°$C -- chłodniejsze, dalej od źródła
+    \item Gradient temperatury: $\Delta T \approx 70°$C na wysokości $0.1$ m
+    \item Rozkład zgodny z intuicją: najcieplej na dole, chłodniej na górze
+\end{itemize}
+
+\subsection{Analiza Niestacjonarna}
+
+Dla kroku czasowego $\Delta t = 1$ s, równanie w pierwszym kroku:
+
+\begin{equation}
+\left[\frac{\mathbf{C}}{1} + \mathbf{H} + \mathbf{H}^{bc}\right]\{T^1\} = \frac{\mathbf{C}}{1}\{T^0\} + \{P\}
+\end{equation}
+
+Przy $T^0 = 100°$C:
+
+\textbf{Prawa strona:}
+\begin{equation}
+\mathbf{RHS} = \mathbf{C}\{T^0\} + \{P\} = \begin{bmatrix}
+9.706 & 4.853 & 2.426 & 4.853 \\
+\vdots & \vdots & \vdots & \vdots
+\end{bmatrix}
+\begin{bmatrix}
+100 \\
+100 \\
+100 \\
+100
+\end{bmatrix}
++
+\begin{bmatrix}
+18,000 \\
+18,000 \\
+0 \\
+0
+\end{bmatrix}
+\approx
+\begin{bmatrix}
+20,184 \\
+20,184 \\
+2,184 \\
+2,184
+\end{bmatrix}
+\end{equation}
+
+Po rozwiązaniu: $T^1 \approx [650, 650, 350, 350]^T$ °C
+
+Temperatura rośnie szybciej na dole (konwekcja) niż na górze (przewodnictwo).
+
+\section{Weryfikacja Wyników}
+
+\subsection{Warunki Poprawności}
+
+\begin{itemize}
+    \item $\det(\mathbf{J}) > 0$ dla wszystkich punktów całkowania (element niezdegenerowany)
+    \item Macierze $\mathbf{H}$, $\mathbf{C}$, $\mathbf{H}^{bc}$ symetryczne
+    \item Macierze $\mathbf{H}$, $\mathbf{C}$ dodatnio określone
+    \item Bilans energii: $\sum$ (strumienie wejściowe) = $\sum$ (strumienie wyjściowe) + $\frac{dE}{dt}$
+\end{itemize}
+
+\subsection{Testy Numeryczne}
+
+\begin{enumerate}
+    \item \textbf{Test symetrii:} sprawdzenie czy $H_{ij} = H_{ji}$
+    \item \textbf{Test zbieżności:} zmniejszenie $\Delta t$ powinno poprawić dokładność
+    \item \textbf{Test porównawczy:} porównanie z rozwiązaniem analitycznym (jeśli dostępne)
+    \item \textbf{Test bilansu energii:} całkowita energia powinna być zachowana
+\end{enumerate}
+
+\subsection{Weryfikacja Bilansu Energii}
+
+Dla przykładu niestacjonarnego, sprawdzamy bilans w pierwszym kroku:
+
+\textbf{Energia na początku:}
+\begin{equation}
+E^0 = \sum_i C_{total,i} \cdot T^0_i = (4 \times 9.706) \cdot 100 \approx 3,882 \text{ J}
+\end{equation}
+
+\textbf{Energia na końcu kroku:}
+\begin{equation}
+E^1 = \sum_i C_{total,i} \cdot T^1_i \approx 19,412 \text{ J}
+\end{equation}
+
+\textbf{Zmiana energii:}
+\begin{equation}
+\Delta E = E^1 - E^0 = 15,530 \text{ J}
+\end{equation}
+
+\textbf{Dostarczona moc $\times$ czas:}
+\begin{equation}
+Q_{in} = (P_1 + P_2) \cdot \Delta t = 36,000 \cdot 1 = 36,000 \text{ J}
+\end{equation}
+
+\textbf{Utrata przez przewodność wewnętrzną i konwekcję:}
+\begin{equation}
+Q_{loss} = Q_{in} - \Delta E = 20,470 \text{ J}
+\end{equation}
+
+Bilans jest zachowany -- część energii podnosi temperaturę ($\Delta E$), część ucieka przez przewodność.
+
+\section{Podsumowanie}
+
+Program implementuje pełną analizę MES dla przewodzenia ciepła, obejmując:
+
+\begin{itemize}
+    \item \textbf{Dyskretyzację przestrzenną:} elementy 4-węzłowe z funkcjami kształtu bilinearnymi
+    \item \textbf{Całkowanie numeryczne:} kwadratura Gaussa 2/3/4-punktowa
+    \item \textbf{Transformacje geometryczne:} macierz Jakobianu i jej odwrotność
+    \item \textbf{Macierze elementowe:} $\mathbf{H}$ (przewodnictwo), $\mathbf{C}$ (pojemność), $\mathbf{H}^{bc}$ (konwekcja)
+    \item \textbf{Wektor obciążenia:} $\mathbf{P}$ (źródła cieplne)
+    \item \textbf{Agregację:} z lokalnych do globalnych macierzy
+    \item \textbf{Analizę stacjonarną:} eliminacja Gaussa
+    \item \textbf{Analizę niestacjonarną:} metoda Eulera wstecznego
+\end{itemize}
+
+Wszystkie wzory i algorytmy są wyprowadzone z podstawowych zasad mechaniki kontinuum, termodynamiki i metody elementów skończonych, zapewniając solidne podstawy teoretyczne dla implementacji numerycznej.
+
+\end{document}

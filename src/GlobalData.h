@@ -1,12 +1,6 @@
 #pragma once
 #include <string>
 
-/**
- * @brief Stores global simulation parameters
- * 
- * Contains all the global data parameters from the grid file
- * such as simulation time, material properties, etc.
- */
 class GlobalData {
 private:
     double simulationTime;
@@ -23,7 +17,6 @@ private:
 public:
     GlobalData();
     
-    // Getters
     double getSimulationTime() const noexcept { return simulationTime; }
     double getSimulationStepTime() const noexcept { return simulationStepTime; }
     double getConductivity() const noexcept { return conductivity; }
@@ -35,7 +28,6 @@ public:
     int getNodesNumber() const noexcept { return nodesNumber; }
     int getElementsNumber() const noexcept { return elementsNumber; }
     
-    // Setters
     void setSimulationTime(double value) noexcept { simulationTime = value; }
     void setSimulationStepTime(double value) noexcept { simulationStepTime = value; }
     void setConductivity(double value) noexcept { conductivity = value; }
@@ -47,6 +39,5 @@ public:
     void setNodesNumber(int value) noexcept { nodesNumber = value; }
     void setElementsNumber(int value) noexcept { elementsNumber = value; }
     
-    // Display global data information
     void print() const;
 };

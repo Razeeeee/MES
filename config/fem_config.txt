@@ -1,21 +1,21 @@
 # GAUSSIAN INTEGRATION POINTS
 # Supported values: 2, 3, or 4
 # For H matrix (conductivity/stiffness matrix) - used in volume integration
-gauss_points_h = 3
+gauss_points_h = 2
 # For C matrix (heat capacity matrix) - used in volume integration
-gauss_points_c = 3
+gauss_points_c = 2
 # For boundary conditions (Hbc matrix and P vector) - used in edge integration
-gauss_points_boundary = 3
+gauss_points_boundary = 2
 
 # CONSOLE OUTPUT CONTROL
 # Control what gets printed to the console
 # Valid values: true/false, yes/no, 1/0, on/off
 # Print local H, Hbc, C, P matrices for each element
-print_local_matrices = false
+print_local_matrices = true
 # Print global H, Hbc, C, P matrices
-print_global_matrices = false
+print_global_matrices = true
 # Print element-to-global node mapping table
-print_assembly_mapping = false
+print_assembly_mapping = true
 # Print system properties (symmetry check, etc)
 print_system_info = false
 # Print boundary condition details

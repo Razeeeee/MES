@@ -2,7 +2,6 @@
 #include <vector>
 #include <string>
 
-// Global FEM equation system with solver methods
 class EquationSystem {
 private:
     std::vector<std::vector<double>> H_global;
